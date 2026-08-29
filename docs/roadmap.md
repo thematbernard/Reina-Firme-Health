@@ -74,13 +74,17 @@ join hop. One row per member (demographics, plan, employer, geography, PCP
 facility, program enrollments, and `patient_id`) is the payoff, and it is cheap
 now that the mart pattern is established.
 
-## 4. Verify the MCP stdio transport — not covered
+## 4. MCP stdio — done, with one residual
 
-The gap most likely to embarrass a live demo. All 107 tests pass and the eval
-harness exercises the tool *functions*, but **nothing has exercised MCP
-serialization or server startup**. If stdio is broken, every check stays green
-and the demo still fails. Run `make serve` from Claude Desktop / Claude Code and
-ask the two strategy questions.
+Covered by `tests/test_stdio.py` (14 tests, negative-controlled) and the
+server's build fingerprint. See
+[verified-status §4](verified-status.md#4-mcp-transport--measured).
+
+The residual is operational, not testable: a client that started the server
+before a change keeps running the old code for the whole session. The
+fingerprint makes that visible (`make fingerprint` vs the `[build ...]` tag in
+the server's instructions) but does not prevent it. A supervisor that restarts
+the server when `server.py` or the semantic layer changes would close it.
 
 ## 5. Run the agent evals — harness ready, never executed
 

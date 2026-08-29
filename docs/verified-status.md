@@ -152,11 +152,47 @@ Two honest disclosures:
   (`processed_date`, `booked_at`, `updated_at`), never the event date, because a
   `service_date` delta would permanently drop every late-arriving claim.
 
+## 4. MCP transport — measured
+
+Previously the largest blind spot: every other test imports `server.py` and
+calls the tool functions directly, so broken tool registration, JSON-RPC
+framing, schema serialization or server startup would leave the suite green and
+the demo dead.
+
+`tests/test_stdio.py` (14 tests) spawns the server as a subprocess exactly as
+Claude Desktop does, completes the initialize handshake, and round-trips every
+tool through the protocol: all four tools advertised with correct parameter
+schemas, `list_tables` / `describe_table` / `run_query` /
+`get_data_dictionary` returning real content, the guardrail rejection arriving
+as a normal tool result rather than breaking the session, SQL errors likewise,
+and the 500-row cap (the largest payload the transport carries) arriving whole
+and truncation-flagged.
+
+**Negative-controlled.** The tests were verified to fail when the server cannot
+start, when the write guardrail is removed, and when a tool description changes.
+That last control initially *passed* when it should have failed — the test
+derived both expected and actual from the same `server.py`, making it
+tautological for drift. Fixed with a committed golden file
+(`tests/golden/tool_descriptions.json`, `make golden`) so an interface change
+must appear as a reviewed diff.
+
+### Stale-server mitigation
+
+A test cannot reach into another process, so no test can prove the server
+running inside someone's Claude Desktop is current. This is not hypothetical:
+**a session in this project was served a dictionary predating several
+corrections, and it was caught only by accident** — MCP servers start once and
+live for the whole session, so editor-side changes never reach them.
+
+The server now reports a build fingerprint (sha256 over `server.py` +
+`dictionary.md` + `schema.md`) in its `instructions`, which every client sees.
+Compare it to `make fingerprint`; a mismatch means restart the client. Verified
+to change when the semantic layer changes, not just when code does.
+
 ## Still unmeasured
 
 | gap | why it matters | how to close |
 |---|---|---|
-| **MCP stdio transport** | if serialization breaks, every test still passes and the demo still fails | run `make serve` from Claude Desktop |
 | **Nightly refresh scheduler** | decision and mechanics settled (ADR 0002); only the cron/Airflow wiring is outstanding | see [roadmap item 1](roadmap.md) |
 | **Agent eval pass rate** | `evals/run.py` has never executed — no credential configured | export a key, `make evals --reps 3` |
 | **Agent tool-call count against marts** | the real "time to answer"; cold agent needed 29 calls against `raw.*` | rerun the cold probe now that marts exist |

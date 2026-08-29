@@ -7,6 +7,7 @@ and metric definitions instead of inventing its own.
 Run:  uv run mcp_server/server.py   (stdio transport)
 """
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -21,13 +22,30 @@ SCHEMA = ROOT / "semantic" / "schema.md"
 MAX_ROWS = 500
 ALLOWED_START = re.compile(r"^\s*(WITH|SELECT|DESCRIBE|SHOW|SUMMARIZE|EXPLAIN)\b", re.IGNORECASE)
 
+
+def build_fingerprint() -> str:
+    """Short hash of the code and semantic layer this process actually loaded.
+
+    MCP servers are started once by the client and live for the whole session,
+    so an editor-side change does not reach a running server. A session was
+    silently served a dictionary predating several corrections, and it was only
+    caught by accident. Surfacing the fingerprint in `instructions` means any
+    client can compare what it is running against the repo.
+    """
+    h = hashlib.sha256()
+    for f in (Path(__file__), DICTIONARY, SCHEMA):
+        h.update(f.read_bytes() if f.exists() else b"missing")
+    return h.hexdigest()[:12]
+
 mcp = MCPServer(
     "reina-firme-analytics",
     instructions=(
         "Analytics warehouse for Reina Firme Health (integrated payer+provider). "
         "ALWAYS call get_data_dictionary first: it contains the generated column "
         "reference, canonical metric definitions, join paths, and measured "
-        "data-quality caveats you must follow. Do not guess column names."
+        "data-quality caveats you must follow. Do not guess column names. "
+        f"[build {build_fingerprint()}] — if this does not match the repo's "
+        "`make fingerprint`, this server is running stale code; restart the client."
     ),
 )
 
