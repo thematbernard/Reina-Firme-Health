@@ -14,6 +14,34 @@ Reina Firme is an integrated payer + provider: 1.1M members, care delivered at
 84 owned facilities (8 hospitals, 64 clinics, 12 urgent cares) across Northern
 California, Greater Atlanta and Central Texas, plus ~200 partner facilities.
 
+## Start here: use the marts
+
+Three modelled tables answer most strategy questions in **one query with no
+joins**. Prefer them over `raw.*` — they exist because the rules and caveats
+below were being applied by hand, inconsistently.
+
+| mart | grain | use for |
+|---|---|---|
+| `marts.facility_metrics` | one row per facility (284) | facility comparison, utilization, staffing, capacity |
+| `marts.market_summary` | one row per market/city (42) | market ranking, access gaps, growth and recapture |
+| `marts.identity_xwalk` | patient_id ↔ member_id (592K) | joining EHR to payer data |
+
+**What the marts make impossible rather than merely documented:**
+
+- Every column is windowed to the same 12 months (2025-06-01 → 2026-05-31), so
+  R2's time-window trap cannot occur within a mart.
+- `providers_based` is sourced correctly, so C1's randomly-assigned
+  `provider_id` cannot be used as a denominator.
+- `ownership` and `facility_type` are columns at the right grain, so C5's
+  partner-inflation cannot occur.
+- `or_utilization_pct` is computed on actual operating days, so the denominator
+  error cannot recur.
+- `allowed_amount` and `plan_paid` are both carried, so R6's
+  invisible-savings trap cannot occur.
+
+The rules below still apply when you drop to `raw.*` — for the full 3-year
+claims history, row-level detail, or anything the marts do not carry.
+
 ## Critical rules — read before writing SQL
 
 **R1. Two identity systems, and only some tables need the crosswalk.**
@@ -145,6 +173,8 @@ market comparisons on those.
 
 ## Where to look things up
 
+- **Start with the marts** (see top of this file); drop to `raw.*` only for
+  what they do not carry.
 - **Columns, types, row counts, date ranges** → `semantic/schema.md` (generated)
 - **Join paths** → `semantic/joins.json`, rendered with measured orphan counts
   into `schema.md`. All 24 paths are asserted orphan-free by

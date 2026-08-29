@@ -361,6 +361,50 @@ Local naming: Redshift's `payer.claims` is `raw.payer_claims`
 | `plan_paid` | DECIMAL(6,2) |  |
 | `member_paid` | DECIMAL(6,2) |  |
 
+### marts.facility_metrics — 284 rows (284)
+
+| column | type | notes |
+|---|---|---|
+| `facility_id` | VARCHAR |  |
+| `facility_name` | VARCHAR |  |
+| `facility_type` | VARCHAR |  |
+| `ownership` | VARCHAR |  |
+| `city` | VARCHAR |  |
+| `state` | VARCHAR |  |
+| `zip` | VARCHAR |  |
+| `latitude` | DECIMAL(8,6) |  |
+| `longitude` | DECIMAL(9,6) |  |
+| `service_lines` | VARCHAR |  |
+| `total_beds` | BIGINT |  |
+| `total_ors` | BIGINT |  |
+| `cost_index` | DECIMAL(4,3) |  |
+| `providers_based` | BIGINT |  |
+| `providers_accepting` | BIGINT |  |
+| `panel_total` | BIGINT |  |
+| `panel_active` | BIGINT |  |
+| `appts_scheduled` | BIGINT |  |
+| `appts_completed` | BIGINT |  |
+| `appts_no_show` | BIGINT |  |
+| `appts_cancelled` | BIGINT |  |
+| `pct_no_show` | DOUBLE |  |
+| `pct_completed` | DOUBLE |  |
+| `encounters` | BIGINT |  |
+| `encounters_inpatient` | BIGINT |  |
+| `encounters_ed` | BIGINT |  |
+| `or_cases` | BIGINT |  |
+| `or_cancelled` | BIGINT |  |
+| `or_rooms_used` | BIGINT |  |
+| `or_operating_days` | BIGINT |  |
+| `or_booked_minutes` | HUGEINT |  |
+| `or_utilization_pct` | DOUBLE |  |
+| `bed_occupancy_pct` | DOUBLE |  |
+| `avg_los_days` | DOUBLE |  |
+| `claims` | BIGINT |  |
+| `allowed_amount` | DECIMAL(38,2) |  |
+| `plan_paid` | DECIMAL(38,2) |  |
+| `appts_per_provider_based` | DOUBLE |  |
+| `appts_per_panel_member` | DOUBLE |  |
+
 ### marts.identity_xwalk — 591,712 rows (592K)
 
 | column | type | notes |
@@ -369,6 +413,37 @@ Local naming: Redshift's `payer.claims` is `raw.payer_claims`
 | `member_id` | VARCHAR |  |
 | `match_method` | VARCHAR |  |
 | `match_confidence` | DOUBLE |  |
+
+### marts.market_summary — 42 rows (42)
+
+| column | type | notes |
+|---|---|---|
+| `city` | VARCHAR |  |
+| `state` | VARCHAR |  |
+| `members_total` | BIGINT |  |
+| `members_active` | BIGINT |  |
+| `owned_clinics` | BIGINT |  |
+| `owned_hospitals` | BIGINT |  |
+| `owned_urgent_care` | BIGINT |  |
+| `owned_facilities` | BIGINT |  |
+| `partner_facilities` | BIGINT |  |
+| `owned_beds` | HUGEINT |  |
+| `owned_ors` | HUGEINT |  |
+| `providers_based_owned` | HUGEINT |  |
+| `appts_completed_at_facilities_here` | HUGEINT |  |
+| `claims` | BIGINT |  |
+| `allowed_musd` | DOUBLE |  |
+| `plan_paid_musd` | DOUBLE |  |
+| `pct_allowed_owned` | DOUBLE |  |
+| `pct_allowed_in_market` | DOUBLE |  |
+| `acute_claims` | BIGINT |  |
+| `acute_allowed_musd` | DOUBLE |  |
+| `pct_acute_in_market` | DOUBLE |  |
+| `median_miles_to_acute` | DOUBLE |  |
+| `pct_acute_over_30mi` | DOUBLE |  |
+| `nonowned_acute_plan_paid_musd` | DOUBLE |  |
+| `acute_if_owned_plan_paid_musd` | DOUBLE |  |
+| `recapture_plan_paid_musd` | DOUBLE |  |
 
 ## Canonical join paths
 

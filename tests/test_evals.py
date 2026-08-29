@@ -50,7 +50,7 @@ def test_tool_schemas_are_strict(erun):
 def test_tools_are_callable_offline(erun):
     """Every tool actually runs against the warehouse, so an eval failure is
     the agent's fault and not a broken harness."""
-    assert erun.TOOL_FNS["list_tables"]().startswith("marts.identity_xwalk")
+    assert "marts.identity_xwalk" in erun.TOOL_FNS["list_tables"]()
     assert "facility_name" in erun.TOOL_FNS["describe_table"](table="raw.ops_facilities")
     assert erun.TOOL_FNS["run_query"](sql="SELECT 1 AS n").splitlines()[1] == "1"
     assert len(erun.TOOL_FNS["get_data_dictionary"]()) > 5000
