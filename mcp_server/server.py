@@ -7,7 +7,9 @@ and metric definitions instead of inventing its own.
 Run:  uv run mcp_server/server.py   (stdio transport)
 """
 
+import argparse
 import hashlib
+import os
 import re
 from pathlib import Path
 
@@ -15,9 +17,59 @@ import duckdb
 from mcp.server.mcpserver import MCPServer
 
 ROOT = Path(__file__).parent.parent
-DB = ROOT / "data" / "warehouse.duckdb"
 DICTIONARY = ROOT / "semantic" / "dictionary.md"
 SCHEMA = ROOT / "semantic" / "schema.md"
+FULL_DB = ROOT / "data" / "warehouse.duckdb"
+PORTABLE_DB = ROOT / "data" / "portable" / "reina_marts.duckdb"
+
+
+def resolve_db() -> Path:
+    """Pick a warehouse, preferring the locally built one.
+
+    data/warehouse.duckdb        — raw.* views over parquet, plus marts.
+    data/portable/reina_marts.duckdb — marts only, 7 MB, PII-free. Lets a clone
+                                   with no Redshift access still serve the marts.
+    REINA_DB overrides both.
+    """
+    if env := os.environ.get("REINA_DB"):
+        return Path(env)
+    if FULL_DB.exists():
+        return FULL_DB
+    if PORTABLE_DB.exists():
+        return PORTABLE_DB
+    raise SystemExit(
+        f"no warehouse found. Expected {FULL_DB} (run `make build`) or "
+        f"{PORTABLE_DB} (run `make portable`), or set REINA_DB."
+    )
+
+
+def detect_mode(db: Path) -> str:
+    """Determine capability from the DATA, not from which path was chosen.
+
+    A REINA_DB override pointing at a marts-only file must still announce
+    marts-only, or the agent spends the session guessing at absent raw.* tables.
+    """
+    con = duckdb.connect(str(db), read_only=True)
+    try:
+        n_raw = con.execute(
+            "SELECT count(*) FROM (SELECT 1 FROM duckdb_tables() WHERE schema_name='raw' "
+            "UNION ALL SELECT 1 FROM duckdb_views() WHERE schema_name='raw')"
+        ).fetchone()[0]
+    finally:
+        con.close()
+    return "full" if n_raw else "portable"
+
+
+DB = resolve_db()
+DB_MODE = detect_mode(DB)
+
+MARTS_ONLY_NOTICE = (
+    "\n\n> **THIS SERVER IS RUNNING MARTS-ONLY.** Only `marts.*` tables exist; "
+    "every `raw.*` table described below is UNAVAILABLE here. Answer from "
+    "`marts.facility_metrics`, `marts.market_summary` and "
+    "`marts.identity_xwalk`, and say so plainly if a question needs row-level "
+    "detail the marts do not carry. Call `list_tables` to see what is present.\n"
+)
 
 MAX_ROWS = 500
 ALLOWED_START = re.compile(r"^\s*(WITH|SELECT|DESCRIBE|SHOW|SUMMARIZE|EXPLAIN)\b", re.IGNORECASE)
@@ -45,7 +97,10 @@ mcp = MCPServer(
         "reference, canonical metric definitions, join paths, and measured "
         "data-quality caveats you must follow. Do not guess column names. "
         f"[build {build_fingerprint()}] — if this does not match the repo's "
-        "`make fingerprint`, this server is running stale code; restart the client."
+        "`make fingerprint`, this server is running stale code; restart the client. "
+        + ("MODE: marts-only — raw.* tables are NOT available in this deployment; "
+           "answer from marts.* and say so when a question needs detail they do "
+           "not carry." if DB_MODE == "portable" else "MODE: full warehouse.")
     ),
 )
 
@@ -75,7 +130,10 @@ def get_data_dictionary() -> str:
     types, date ranges and join paths). Read this before writing any SQL — the
     column names here are generated from the warehouse, so trust them over
     anything you remember."""
-    return DICTIONARY.read_text() + "\n\n---\n\n" + SCHEMA.read_text()
+    body = DICTIONARY.read_text() + "\n\n---\n\n" + SCHEMA.read_text()
+    if DB_MODE == "portable":
+        return MARTS_ONLY_NOTICE + body
+    return body
 
 
 @mcp.tool()
@@ -138,4 +196,20 @@ def run_query(sql: str) -> str:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--transport", default="stdio", choices=["stdio", "sse", "streamable-http"],
+        help="stdio for a local client (default); streamable-http to host it",
+    )
+    ap.add_argument("--host", default="127.0.0.1", help="bind host for http transports")
+    ap.add_argument("--port", type=int, default=8000, help="bind port for http transports")
+    args = ap.parse_args()
+
+    if args.transport == "stdio":
+        mcp.run()
+    else:
+        # NOTE before exposing this publicly: run_query accepts arbitrary
+        # read-only SQL with no statement timeout, so one cartesian join can
+        # exhaust the box. Hosting needs auth, a statement timeout, a memory cap
+        # and rate limiting first — see docs/roadmap.md.
+        mcp.run(transport=args.transport, host=args.host, port=args.port)

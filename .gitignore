@@ -2,6 +2,12 @@
 data/
 *.parquet
 *.duckdb
+
+# data/portable/reina_marts.duckdb is a 7MB PII-free marts-only artifact that
+# lets a clone run the MCP server with no Redshift access (`make portable`).
+# It is client-DERIVED data, so it stays ignored until the data owner approves
+# redistribution. To ship it, uncomment the negation below and commit the file.
+# !data/portable/reina_marts.duckdb
 __pycache__/
 .venv/
 .ipynb_checkpoints/

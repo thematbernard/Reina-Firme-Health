@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs build test evals identity-quality benchmark analysis fingerprint golden serve all
+.PHONY: check profile extract load marts docs portable build test evals identity-quality benchmark analysis fingerprint golden serve serve-http all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
@@ -39,8 +39,14 @@ fingerprint:  ## print the build fingerprint the MCP server should report
 golden:       ## regenerate tests/golden/tool_descriptions.json (review the diff!)
 	uv run python -c "import json,sys;sys.path.insert(0,'mcp_server');import server;from pathlib import Path;Path('tests/golden/tool_descriptions.json').write_text(json.dumps({n:' '.join(getattr(server,n).__doc__.split()) for n in ('get_data_dictionary','list_tables','describe_table','run_query')},indent=2,sort_keys=True)+chr(10))"
 
-serve:        ## run the MCP server on stdio
+serve:        ## run the MCP server on stdio (what Claude Desktop uses)
 	uv run mcp_server/server.py
 
-build: extract marts docs   ## full rebuild from Redshift
+serve-http:   ## run the MCP server over streamable HTTP (see docs/roadmap.md before exposing)
+	uv run mcp_server/server.py --transport streamable-http --host 127.0.0.1 --port 8000
+
+portable:     ## export a 7MB PII-free marts-only warehouse (runs without Redshift)
+	uv run pipeline/06_export_portable.py
+
+build: extract marts docs portable   ## full rebuild from Redshift
 all: build test evals
