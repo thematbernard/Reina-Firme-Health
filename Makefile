@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs portable build test evals identity-quality benchmark analysis fingerprint golden server-info serve serve-http all
+.PHONY: check profile extract load marts docs portable build test evals identity-quality benchmark analysis fingerprint golden server-info serve serve-http demo all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
@@ -47,6 +47,10 @@ serve:        ## run the MCP server on stdio (what Claude Desktop uses)
 
 serve-http:   ## run the MCP server over streamable HTTP (see docs/roadmap.md before exposing)
 	uv run mcp_server/server.py --transport streamable-http --host 127.0.0.1 --port 8000
+
+demo:         ## pane 2: attach a client to the visible `make serve-http` server (run that first)
+	@nc -z 127.0.0.1 8000 2>/dev/null || { echo "nothing on 127.0.0.1:8000 — run 'make serve-http' in another pane first"; exit 1; }
+	claude --mcp-config .mcp.http.json --strict-mcp-config
 
 portable:     ## export a 7MB PII-free marts-only warehouse (runs without Redshift)
 	uv run pipeline/06_export_portable.py

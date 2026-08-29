@@ -116,6 +116,18 @@ def test_list_tables_over_stdio():
         assert expected in out
 
 
+def test_list_tables_marks_views_instead_of_blank():
+    """A blank count reads as "zero rows" to an agent. raw.* are views over
+    parquet with no stored size, so they must say so explicitly."""
+    rows = dict(
+        line.split("\t", 1)
+        for line in text_of(run(lambda s: s.call_tool("list_tables", {}))).splitlines()[1:]
+    )
+    assert rows["raw.payer_claims"] == "view"
+    assert rows["marts.facility_metrics"].isdigit()
+    assert "" not in rows.values()
+
+
 def test_describe_table_over_stdio():
     out = text_of(run(lambda s: s.call_tool(
         "describe_table", {"table": "raw.ops_facilities"})))

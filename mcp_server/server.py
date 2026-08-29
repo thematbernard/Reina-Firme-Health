@@ -198,22 +198,27 @@ def get_data_dictionary() -> str:
 
 @mcp.tool()
 def list_tables() -> str:
-    """List all queryable tables (schema.table) with row counts."""
+    """List all queryable tables (schema.table) with approximate row counts.
+    Counts are DuckDB estimates, not exact. Views over parquet store no size,
+    so they report `view` rather than a number — that means "count unknown",
+    NOT empty; the view is queryable like any table. SELECT count(*) if you
+    need an exact figure."""
     log.info("list_tables")
     con = _connect()
     rows = con.execute(
         """
         SELECT schema_name || '.' || table_name AS tbl,
-               coalesce(estimated_size, 0) AS approx_rows
+               coalesce(estimated_size, 0)::VARCHAR AS approx_rows
         FROM duckdb_tables()
         UNION ALL
-        SELECT schema_name || '.' || view_name, NULL
+        SELECT schema_name || '.' || view_name, 'view'
         FROM duckdb_views() WHERE schema_name IN ('raw', 'marts')
         ORDER BY 1
         """
     ).fetchall()
     con.close()
-    return "\n".join(f"{t}\t{'' if n is None else n}" for t, n in rows)
+    header = "table\tapprox_rows ('view' = count not stored, still queryable)"
+    return "\n".join([header] + [f"{t}\t{n}" for t, n in rows])
 
 
 @mcp.tool()
@@ -284,6 +289,18 @@ if __name__ == "__main__":
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # Uvicorn logs one access line per JSON-RPC POST — five per tool call, all
+    # "POST /mcp 200". That carries nothing the per-tool log lines below don't,
+    # and it buries them. The stdio transport has no access log at all, so
+    # dropping it also makes the two transports' stderr directly comparable.
+    #
+    # A filter rather than setLevel: uvicorn.Config applies its own dictConfig
+    # at startup, which resets this logger's level and handlers but leaves
+    # filters attached. setLevel here is silently undone.
+    # REINA_LOG_LEVEL=DEBUG keeps the access log.
+    if os.environ.get("REINA_LOG_LEVEL", "INFO").upper() != "DEBUG":
+        logging.getLogger("uvicorn.access").addFilter(lambda _record: False)
+
     log.info(
         "starting reina-firme-analytics: db=%s mode=%s build=%s transport=%s",
         DB, DB_MODE, build_fingerprint(), args.transport,

@@ -1,6 +1,6 @@
 {
   "describe_table": "Columns and types for one table, plus 3 sample rows. `table` must be schema-qualified, e.g. 'raw.payer_claims' or 'marts.identity_xwalk'.",
   "get_data_dictionary": "The semantic layer, in two parts: hand-written business rules (identity, time windows, canonical metric definitions, measured data-quality caveats) followed by the GENERATED schema reference (every table's real columns, types, date ranges and join paths). Read this before writing any SQL \u2014 the column names here are generated from the warehouse, so trust them over anything you remember.",
-  "list_tables": "List all queryable tables (schema.table) with row counts.",
+  "list_tables": "List all queryable tables (schema.table) with approximate row counts. Counts are DuckDB estimates, not exact. Views over parquet store no size, so they report `view` rather than a number \u2014 that means \"count unknown\", NOT empty; the view is queryable like any table. SELECT count(*) if you need an exact figure.",
   "run_query": "Run a read-only SQL query (DuckDB dialect) and return rows as TSV (capped at 500 \u2014 aggregate rather than paginate). Consult get_data_dictionary for table names, join paths, and canonical metric definitions first."
 }

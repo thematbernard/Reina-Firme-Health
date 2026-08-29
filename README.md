@@ -126,6 +126,7 @@ Then ask Claude: *"Where should we open our next facility?"*
 | `benchmark` | time marts vs raw vs Redshift |
 | `evals` | agent-level evals through the MCP tools *(needs an Anthropic key)* |
 | `serve` / `serve-http` | run the MCP server on stdio / HTTP |
+| `demo` | attach a client to a visible `serve-http` server via `.mcp.http.json`, so tool calls and SQL stream live in a second pane |
 | `fingerprint` / `golden` | print the build fingerprint; regenerate the tool-description golden |
 
 ## How to check the work
