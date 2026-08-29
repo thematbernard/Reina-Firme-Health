@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs build test serve all
+.PHONY: check profile extract load marts docs build test analysis serve all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
