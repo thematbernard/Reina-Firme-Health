@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs portable build test evals identity-quality benchmark analysis fingerprint golden serve serve-http all
+.PHONY: check profile extract load marts docs portable build test evals identity-quality benchmark analysis fingerprint golden server-info serve serve-http all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
@@ -32,6 +32,9 @@ benchmark:    ## time the query path: marts vs raw vs Redshift
 
 analysis:     ## re-run the strategy analyses and print every number
 	uv run python analysis/run.py
+
+server-info:  ## start a fresh server over stdio and print mode + build fingerprint
+	uv run python mcp_server/probe.py
 
 fingerprint:  ## print the build fingerprint the MCP server should report
 	@uv run python -c "import sys; sys.path.insert(0,'mcp_server'); import server; print(server.build_fingerprint())"
