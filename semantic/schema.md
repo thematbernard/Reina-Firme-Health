@@ -361,6 +361,18 @@ Local naming: Redshift's `payer.claims` is `raw.payer_claims`
 | `plan_paid` | DECIMAL(6,2) |  |
 | `member_paid` | DECIMAL(6,2) |  |
 
+### marts._build_metadata — 7 rows (7)
+
+| column | type | notes |
+|---|---|---|
+| `built_at` | TIMESTAMP WITH TIME ZONE | range 2026-08-29 → 2026-08-29 |
+| `source_table` | VARCHAR |  |
+| `row_count` | BIGINT |  |
+| `event_column` | VARCHAR |  |
+| `max_event_date` | DATE | range 2026-05-30 → 2026-05-31; 14% null |
+| `incremental_column` | VARCHAR |  |
+| `days_behind_today` | BIGINT |  |
+
 ### marts.facility_metrics — 284 rows (284)
 
 | column | type | notes |

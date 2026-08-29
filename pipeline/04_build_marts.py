@@ -19,26 +19,36 @@ SQL_DIR = Path(__file__).parent / "sql"
 
 
 def main():
-    if DB.exists():
-        DB.unlink()
-    con = duckdb.connect(str(DB))
-    con.execute("CREATE SCHEMA raw")
-    con.execute("CREATE SCHEMA marts")
+    # Build to a scratch file and swap it in atomically. DuckDB allows a single
+    # writer, so rebuilding in place would either fail against a live MCP server
+    # or expose readers to a half-built warehouse. This matters because the
+    # warehouse is refreshed on a schedule while readers are connected — see
+    # docs/decisions/0002-materialization-and-freshness.md.
+    tmp = DB.with_suffix(".duckdb.tmp")
+    tmp.unlink(missing_ok=True)
 
-    for f in sorted(RAW.glob("*.parquet")):
-        con.execute(f"CREATE VIEW raw.{f.stem} AS SELECT * FROM read_parquet('{f}')")
+    con = duckdb.connect(str(tmp))
+    try:
+        con.execute("CREATE SCHEMA raw")
+        con.execute("CREATE SCHEMA marts")
 
-    for sql_file in sorted(SQL_DIR.glob("*.sql")):
-        con.execute(sql_file.read_text())
-        print(f"ran {sql_file.name}")
+        for f in sorted(RAW.glob("*.parquet")):
+            con.execute(f"CREATE VIEW raw.{f.stem} AS SELECT * FROM read_parquet('{f}')")
 
-    for (table,) in con.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema='marts' ORDER BY 1"
-    ).fetchall():
-        n = con.execute(f"SELECT count(*) FROM marts.{table}").fetchone()[0]
-        print(f"  marts.{table}: {n:,} rows")
+        for sql_file in sorted(SQL_DIR.glob("*.sql")):
+            con.execute(sql_file.read_text())
+            print(f"ran {sql_file.name}")
 
-    con.close()
+        for (table,) in con.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='marts' ORDER BY 1"
+        ).fetchall():
+            n = con.execute(f"SELECT count(*) FROM marts.{table}").fetchone()[0]
+            print(f"  marts.{table}: {n:,} rows")
+    finally:
+        con.close()
+
+    tmp.replace(DB)   # atomic on POSIX: readers see old or new, never partial
     print(f"built {DB}")
 
 

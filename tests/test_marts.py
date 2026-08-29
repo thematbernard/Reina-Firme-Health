@@ -178,3 +178,49 @@ def test_recapture_dollars_do_not_by_themselves_pick_sacramento(con):
 
     corridor = sum(rows[c] for c in ("Sacramento", "Stockton", "Modesto"))
     assert corridor == pytest.approx(33.2, abs=1.5), corridor
+
+
+# --- freshness provenance (ADR 0002) -----------------------------------------
+
+def test_build_metadata_records_provenance(con):
+    """The warehouse is a scheduled cache of read-only Redshift. A cache you
+    cannot age is a cache you cannot trust, so every build must record when it
+    ran and how current each source was."""
+    rows = con.execute(
+        """SELECT source_table, row_count, incremental_column, built_at
+           FROM marts._build_metadata"""
+    ).fetchall()
+    assert len(rows) == 7
+    for src, n, inc, built in rows:
+        assert src.startswith("raw."), src
+        assert n > 0, f"{src} empty"
+        assert inc, f"{src} has no incremental column — nightly delta impossible"
+        assert built is not None
+
+
+def test_build_metadata_row_counts_match_sources(con):
+    """Metadata must describe the warehouse it was built from, not a stale run."""
+    for src, recorded in con.execute(
+        "SELECT source_table, row_count FROM marts._build_metadata"
+    ).fetchall():
+        actual = con.execute(f"SELECT count(*) FROM {src}").fetchone()[0]
+        assert recorded == actual, f"{src}: metadata {recorded:,} != actual {actual:,}"
+
+
+def test_claims_incremental_key_is_not_the_event_date(con):
+    """The reason ADR 0002 keys the nightly delta on processed_date: claims are
+    adjudicated a median ~67 days after service, so a delta filtered on
+    service_date would permanently drop late-arriving claims."""
+    inc = con.execute(
+        "SELECT incremental_column FROM marts._build_metadata "
+        "WHERE source_table = 'raw.payer_claims'"
+    ).fetchone()[0]
+    assert inc == "processed_date", inc
+
+    median_lag = con.execute(
+        """SELECT median(date_diff('day', service_date, processed_date))
+           FROM raw.payer_claims WHERE processed_date IS NOT NULL"""
+    ).fetchone()[0]
+    assert median_lag > 30, (
+        f"claims lag now {median_lag}d — if it collapsed, revisit the lookback window"
+    )

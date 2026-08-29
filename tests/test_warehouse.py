@@ -80,7 +80,7 @@ def test_all_tables_non_empty(con):
         "SELECT table_schema || '.' || table_name FROM information_schema.tables "
         "WHERE table_schema IN ('raw','marts')"
     ).fetchall()
-    assert len(tables) == 26, f"expected 26 tables (23 raw + 3 marts), found {len(tables)}"
+    assert len(tables) == 27, f"expected 27 tables (23 raw + 4 marts), found {len(tables)}"
     empty = [t for (t,) in tables if con.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0]
     assert not empty
 

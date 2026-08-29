@@ -126,16 +126,38 @@ Two honest disclosures:
 - The marts precompute, so their query time excludes a **1.06s build**. Against
   the DuckDB raw path the build pays for itself after roughly a dozen questions;
   against Redshift, after three.
-- The DuckDB numbers benefit from a local 3.6GB parquet snapshot. That is a
-  legitimate architectural choice given read-only source access, but it means
-  freshness is bounded by the last `make extract` — this is a batch analytics
-  path, not a real-time one.
+- The DuckDB numbers come from a local parquet snapshot (1.6GB). **This is a
+  deliberate architectural decision, not a shortcut** — see
+  [ADR 0002](decisions/0002-materialization-and-freshness.md). Source access is
+  read-only, so a materialized cache is the only place the correctness rules can
+  be encoded rather than merely documented. The snapshot is refreshed by a
+  nightly job so each morning starts on current data.
+
+  The cadence is justified by measurement, not preference: claims are not final
+  in source until a **median 67 days** after service (p90 91, max 104 — ~7 days
+  to submit, ~60 to adjudicate). A nightly refresh therefore adds ≤24h on top of
+  an inherent ~67-day pipeline, about **0.5% of the latency already in the
+  data**. Sub-daily refresh would add operational surface to chase a number
+  nobody can act on faster.
+
+  Freshness is observable rather than assumed: `marts._build_metadata` records
+  `built_at`, per-source row counts, `max_event_date`, `days_behind_today`, and
+  the correct incremental column per table. The mart swap is atomic (build to
+  `.tmp`, then `Path.replace()`), so a refresh cannot expose a half-built
+  warehouse to a live reader.
+
+  The scheduler itself is specified but **not yet implemented** — see
+  [roadmap item 1](roadmap.md). The one detail that would quietly corrupt the
+  warehouse if missed: nightly deltas must key on the *landing* column
+  (`processed_date`, `booked_at`, `updated_at`), never the event date, because a
+  `service_date` delta would permanently drop every late-arriving claim.
 
 ## Still unmeasured
 
 | gap | why it matters | how to close |
 |---|---|---|
 | **MCP stdio transport** | if serialization breaks, every test still passes and the demo still fails | run `make serve` from Claude Desktop |
+| **Nightly refresh scheduler** | decision and mechanics settled (ADR 0002); only the cron/Airflow wiring is outstanding | see [roadmap item 1](roadmap.md) |
 | **Agent eval pass rate** | `evals/run.py` has never executed — no credential configured | export a key, `make evals --reps 3` |
 | **Agent tool-call count against marts** | the real "time to answer"; cold agent needed 29 calls against `raw.*` | rerun the cold probe now that marts exist |
 | **`marts.member_360`** | the crosswalk is still only a join hop; unified identity has no consumer | build it |
