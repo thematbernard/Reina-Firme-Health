@@ -40,9 +40,16 @@ wrong answers. The marts make five of them structurally impossible.
 
 ## Architecture
 
+A **mart** is a table modelled for a question rather than for a source system:
+a fixed grain — one row per facility, per market, per patient-member link — with
+the joins and business rules already applied. The three here exist because the
+alternative was documentation: telling the agent how to assemble `raw.*`
+correctly on every query. Their grains were chosen to retire specific measured
+caveats, not to mirror source; see [semantic/dictionary.md](semantic/dictionary.md).
+
 ```
 Redshift (read-only)
-      │  make extract          24 tables → parquet, 1.6 GB
+      │  make extract          23 of 24 base tables → parquet, 1.6 GB
       ▼
 data/raw/*.parquet
       │  make marts            views + materialized marts, atomic swap, 1.06s
@@ -98,6 +105,13 @@ Then ask Claude: *"Where should we open our next facility?"*
 > `make fingerprint` against the `[build …]` tag in the server's instructions;
 > a mismatch means restart.
 
+### Environment variables
+
+| var | effect |
+|---|---|
+| `REINA_DB` | override the warehouse path; the server still detects full vs marts-only from the data |
+| `REINA_LOG_LEVEL` | server log level, default `INFO`. Logs go to **stderr** — stdout carries the JSON-RPC frames on stdio, so nothing else may write there |
+
 ## Make targets
 
 | target | what |
@@ -106,7 +120,7 @@ Then ask Claude: *"Where should we open our next facility?"*
 | `extract` / `marts` / `docs` | pull to parquet; build marts; regenerate `schema.md` |
 | `portable` | export the 7 MB PII-free marts-only warehouse |
 | `build` | `extract` + `marts` + `docs` + `portable` |
-| `test` | 130 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
+| `test` | 145 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |
@@ -154,6 +168,30 @@ Nothing here asks to be taken on trust.
 - **Distances are straight-line**, not drive time.
   `raw.external_drive_time_isochrones` is unused; Sacramento's 75.5 miles is
   almost certainly worse in drive time.
+- **Two source tables are deliberately not mirrored 1:1**, so the warehouse
+  carries 23 of the 24 source base tables. `outreach.communications_log` (4.6M
+  rows of per-message delivery telemetry — channel, template, response class) is
+  not extracted: campaign-execution detail does not bear on facility siting.
+  `ehr.observations` is pre-aggregated in Redshift to patient x month x LOINC as
+  `raw.ehr_observations_monthly`, so row-level vitals and labs are not
+  recoverable without a re-extract. Both are declared in `pipeline/02_extract.py`.
+- **The observations rollup did not pay for itself.** 70.8M source rows became
+  47.8M — a 32% reduction, ~1.48 source rows per group — because patient x month
+  x LOINC is nearly unique here. Nothing downstream consumes it: no mart or
+  analysis references it. The aggregation cost row grain and bought neither space
+  nor a consumer. Extracting at row grain, or dropping it outright as with
+  `communications_log`, would both be more defensible than this middle ground.
+- **Mart coverage was derived from n=2 questions, and the correctness guarantee
+  stops at its edge.** The marts encode five measured caveats structurally, but
+  only at the facility and market grains they cover. Anything else — clinical
+  detail, the full 3-year claims history, any grain not modelled — drops to
+  `raw.*`, where those same caveats revert to prose the agent must obey on every
+  query. The structural guarantee is therefore strongest on the questions already
+  answered by hand and weakest on the novel ones an LLM interface exists to serve.
+  In production, mart selection would be driven by observed query logs, not by two
+  questions supplied up front. `evals/cases.json` is skewed the same way (8 of 11
+  cases orbit those two questions); `raw_navigation_prevalence` is the one case
+  that deliberately probes the ungoverned `raw.*` path.
 - **The agent evals have never run** — no Anthropic credential was configured.
   The harness is complete and `--dry-run` verifies it; no pass rate is claimed.
 - **Freshness is bounded by the last extract.** The nightly refresh is specified

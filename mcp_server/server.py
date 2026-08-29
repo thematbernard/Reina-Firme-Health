@@ -9,12 +9,18 @@ Run:  uv run mcp_server/server.py   (stdio transport)
 
 import argparse
 import hashlib
+import logging
 import os
 import re
+import sys
 from pathlib import Path
 
 import duckdb
 from mcp.server.mcpserver import MCPServer
+
+# Diagnostics go to stderr, never stdout: on the stdio transport stdout carries
+# the JSON-RPC frames, and a single stray byte there desynchronises the client.
+log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).parent.parent
 DICTIONARY = ROOT / "semantic" / "dictionary.md"
@@ -75,6 +81,53 @@ MAX_ROWS = 500
 ALLOWED_START = re.compile(r"^\s*(WITH|SELECT|DESCRIBE|SHOW|SUMMARIZE|EXPLAIN)\b", re.IGNORECASE)
 
 
+def sql_code_only(sql: str) -> str:
+    r"""Blank out comments, string literals and quoted identifiers, keeping length.
+
+    The guardrails below need to reason about SQL *structure*, and both were
+    reading the raw text instead:
+
+    - a query opening with a `-- comment` line failed ALLOWED_START, which is
+      exactly how a model writes a non-trivial query;
+    - a `;` inside a string literal tripped the single-statement check.
+
+    Replacing those spans with spaces (rather than deleting them) keeps offsets
+    intact, so `^\s*` still anchors correctly. Only this copy is inspected —
+    the original text is what gets executed, so nothing is silently rewritten.
+
+    Escaping follows DuckDB: quotes are doubled, backslash is not an escape.
+    Dollar-quoted strings are not tracked, so a `;` inside one is still
+    rejected — conservative in the safe direction.
+    """
+    out: list[str] = []
+    i, n = 0, len(sql)
+    while i < n:
+        pair, ch = sql[i:i + 2], sql[i]
+        if pair == "--":
+            j = sql.find("\n", i)
+            j = n if j == -1 else j
+        elif pair == "/*":
+            j = sql.find("*/", i + 2)
+            j = n if j == -1 else j + 2
+        elif ch in "'\"":
+            j = i + 1
+            while j < n:
+                if sql[j] != ch:
+                    j += 1
+                elif sql[j:j + 2] == ch * 2:  # doubled quote = literal quote
+                    j += 2
+                else:
+                    j += 1
+                    break
+        else:
+            out.append(ch)
+            i += 1
+            continue
+        out.append(" " * (j - i))
+        i = j
+    return "".join(out)
+
+
 def build_fingerprint() -> str:
     """Short hash of the code and semantic layer this process actually loaded.
 
@@ -105,6 +158,12 @@ mcp = MCPServer(
 )
 
 
+def _oneline(sql: str, limit: int = 300) -> str:
+    """Collapse SQL to one log line — multi-line SQL in stderr is unreadable."""
+    flat = " ".join(sql.split())
+    return flat if len(flat) <= limit else flat[:limit] + "…"
+
+
 def _connect() -> duckdb.DuckDBPyConnection:
     return duckdb.connect(str(DB), read_only=True)
 
@@ -130,6 +189,7 @@ def get_data_dictionary() -> str:
     types, date ranges and join paths). Read this before writing any SQL — the
     column names here are generated from the warehouse, so trust them over
     anything you remember."""
+    log.info("get_data_dictionary (mode=%s)", DB_MODE)
     body = DICTIONARY.read_text() + "\n\n---\n\n" + SCHEMA.read_text()
     if DB_MODE == "portable":
         return MARTS_ONLY_NOTICE + body
@@ -139,6 +199,7 @@ def get_data_dictionary() -> str:
 @mcp.tool()
 def list_tables() -> str:
     """List all queryable tables (schema.table) with row counts."""
+    log.info("list_tables")
     con = _connect()
     rows = con.execute(
         """
@@ -159,7 +220,9 @@ def list_tables() -> str:
 def describe_table(table: str) -> str:
     """Columns and types for one table, plus 3 sample rows. `table` must be
     schema-qualified, e.g. 'raw.payer_claims' or 'marts.identity_xwalk'."""
+    log.info("describe_table: %s", table)
     if not re.fullmatch(r"[a-z_]+\.[a-z_0-9]+", table):
+        log.warning("describe_table rejected malformed name: %r", table)
         return "error: table must look like 'raw.payer_claims'"
     con = _connect()
     try:
@@ -167,6 +230,7 @@ def describe_table(table: str) -> str:
         cols = [r[0] for r in schema]
         sample = con.execute(f"SELECT * FROM {table} LIMIT 3").fetchall()
     except Exception as e:
+        log.warning("describe_table failed for %s: %s", table, e)
         return f"error: {e}"
     finally:
         con.close()
@@ -179,19 +243,27 @@ def run_query(sql: str) -> str:
     """Run a read-only SQL query (DuckDB dialect) and return rows as TSV
     (capped at 500 — aggregate rather than paginate). Consult get_data_dictionary
     for table names, join paths, and canonical metric definitions first."""
-    if not ALLOWED_START.match(sql):
+    code = sql_code_only(sql)
+    if not ALLOWED_START.match(code):
+        log.warning("run_query rejected (not a read statement): %s", _oneline(sql))
         return "error: only SELECT/WITH/DESCRIBE/SHOW/SUMMARIZE/EXPLAIN queries are allowed"
-    if ";" in sql.rstrip().rstrip(";"):
+    if ";" in code.rstrip().rstrip(";"):
+        log.warning("run_query rejected (multiple statements): %s", _oneline(sql))
         return "error: a single statement per call"
+    log.info("run_query: %s", _oneline(sql))
     con = _connect()
     try:
         cur = con.execute(sql)
         cols = [d[0] for d in cur.description]
         rows = cur.fetchmany(MAX_ROWS + 1)
     except Exception as e:
+        # The model sees this and usually self-corrects; log it so a demo-time
+        # wrong answer can be traced back to the query that produced it.
+        log.warning("run_query failed: %s — sql: %s", e, _oneline(sql))
         return f"error: {e}"
     finally:
         con.close()
+    log.info("run_query returned %d rows", min(len(rows), MAX_ROWS))
     return _format(cols, rows[:MAX_ROWS], truncated=len(rows) > MAX_ROWS)
 
 
@@ -205,11 +277,34 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=8000, help="bind port for http transports")
     args = ap.parse_args()
 
+    # Configure only under __main__: importing this module (tests, probe.py)
+    # must not reconfigure the host process's logging.
+    logging.basicConfig(
+        level=os.environ.get("REINA_LOG_LEVEL", "INFO").upper(),
+        stream=sys.stderr,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    log.info(
+        "starting reina-firme-analytics: db=%s mode=%s build=%s transport=%s",
+        DB, DB_MODE, build_fingerprint(), args.transport,
+    )
+
     if args.transport == "stdio":
         mcp.run()
     else:
-        # NOTE before exposing this publicly: run_query accepts arbitrary
-        # read-only SQL with no statement timeout, so one cartesian join can
-        # exhaust the box. Hosting needs auth, a statement timeout, a memory cap
-        # and rate limiting first — see docs/roadmap.md.
+        # NOTE before exposing this publicly. Two separate problems:
+        #
+        # 1. Resource exhaustion — run_query accepts arbitrary SQL with no
+        #    statement timeout, so one cartesian join can exhaust the box.
+        #    Needs auth, a statement timeout, a memory cap and rate limiting.
+        #
+        # 2. File disclosure — `read_only=True` blocks writes, not reads of the
+        #    local filesystem. read_csv / read_parquet / read_text / glob are
+        #    all reachable from a bare SELECT, so a caller could read anything
+        #    this process can, including .env. Locally over stdio that is no
+        #    worse than the user's own shell; over HTTP it is exfiltration.
+        #    Needs enable_external_access=false or a function allowlist —
+        #    auth alone does not cover it.
+        #
+        # See docs/roadmap.md.
         mcp.run(transport=args.transport, host=args.host, port=args.port)

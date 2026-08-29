@@ -6,7 +6,10 @@
     "must_not: failure modes — fabrication, wrong column, unwindowed comparison.",
     "kind: 'factual' | 'analytical' | 'bad_premise' | 'unanswerable'.",
     "The bad_premise and unanswerable cases are the point: they measure whether",
-    "the semantic layer stops the agent inventing an answer."
+    "the semantic layer stops the agent inventing an answer.",
+    "raw_navigation_prevalence is the ungoverned-path case: no mart carries clinical",
+    "data, so the agent must navigate raw.* with only the dictionary to protect it —",
+    "it measures whether the mart-layer guarantee generalizes past the two questions."
   ],
   "cases": [
     {
@@ -88,6 +91,14 @@
       "expected": "ops_appointments has scheduled_dt_local and booked_at, so a booked-to-scheduled lead time is derivable — but there is no wait-time column and no requested-date field. Acceptable answers either compute booked_at -> scheduled_dt_local and label it explicitly as booking lead time, or state that true wait time is not available. Fabricating a 'wait time' column is a failure.",
       "must_include": [],
       "must_not": ["wait_time", "wait_time_days"]
+    },
+    {
+      "id": "raw_navigation_prevalence",
+      "kind": "analytical",
+      "question": "What are the most common chronic conditions among our Sacramento members, and what share of them has hypertension?",
+      "expected": "No mart carries clinical data, so this requires raw.ehr_conditions joined to raw.payer_members through marts.identity_xwalk (conditions are keyed on patient_id, members on member_id). Top conditions by distinct Sacramento members: essential hypertension 4,820; obesity unspecified 3,119; low back pain 2,497; nicotine dependence 1,900; morbid obesity 1,742; type 2 diabetes 1,497. Ranking is stable if filtered to status='active'. The denominator is the trap: only 29,598 of Sacramento's 55,183 members (53.6%) link to an EHR patient, so hypertension is 16.3% of linked members. Dividing by all 55,183 gives 8.7% and understates prevalence ~1.9x. A correct answer states the partial-EHR-coverage limitation rather than presenting a rate as population prevalence.",
+      "must_include": ["hypertension", "4820", "29598"],
+      "must_not": ["8.7", "no clinical data", "cannot determine"]
     }
   ]
 }

@@ -249,3 +249,114 @@ def test_fingerprint_changes_when_the_semantic_layer_changes(tmp_path):
     finally:
         srv.DICTIONARY.write_bytes(original)
     assert srv.build_fingerprint() == before
+
+
+# --- guardrails inspect SQL structure, not raw text --------------------------
+
+def _srv():
+    """Load server.py as a module for direct unit tests of its helpers."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("srv_guard", SERVER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("sql,expected", [
+    ("SELECT 1", "SELECT 1"),
+    ("-- note\nSELECT 1", "       \nSELECT 1"),
+    ("/* a; b */ SELECT 1", "           SELECT 1"),
+    ("SELECT 'a;b'", "SELECT      "),
+    ('SELECT "od;d" FROM t', "SELECT        FROM t"),
+    ("SELECT 'it''s; fine'", "SELECT              "),
+    ("SELECT 'unterminated", "SELECT              "),
+])
+def test_sql_code_only_blanks_spans_and_preserves_length(sql, expected):
+    """Comments and literals become spaces; offsets are preserved so the
+    ALLOWED_START anchor still works."""
+    got = _srv().sql_code_only(sql)
+    assert got == expected
+    assert len(got) == len(sql)
+
+
+def test_leading_comment_no_longer_blocks_a_valid_query():
+    """Regression: a model writing commented SQL was told its SELECT was not a
+    SELECT. This was hit live during an analysis session."""
+    out = text_of(run(lambda s: s.call_tool("run_query", {"sql":
+        "-- how many facilities do we have?\n"
+        "SELECT count(*) AS n FROM raw.ops_facilities"})))
+    assert not out.startswith("error:"), out
+    assert out.splitlines()[1].strip() == "284"
+
+
+def test_block_comment_prefix_is_accepted():
+    out = text_of(run(lambda s: s.call_tool("run_query", {"sql":
+        "/* owned only */ SELECT count(*) AS n FROM raw.ops_facilities "
+        "WHERE ownership = 'owned'"})))
+    assert not out.startswith("error:"), out
+
+
+def test_semicolon_inside_a_string_literal_is_not_a_second_statement():
+    out = text_of(run(lambda s: s.call_tool("run_query", {"sql":
+        "SELECT 'a;b' AS lit"})))
+    assert not out.startswith("error:"), out
+    assert "a;b" in out
+
+
+def test_trailing_semicolon_still_allowed():
+    out = text_of(run(lambda s: s.call_tool("run_query", {"sql":
+        "SELECT count(*) AS n FROM raw.ops_facilities;"})))
+    assert not out.startswith("error:"), out
+
+
+def test_comment_cannot_smuggle_a_write():
+    """Stripping comments must not become a way to get a write past the check."""
+    out = text_of(run(lambda s: s.call_tool("run_query", {"sql":
+        "-- SELECT 1\nDROP TABLE raw.payer_claims"})))
+    assert out.startswith("error:") and "only SELECT" in out
+
+
+def test_second_statement_still_rejected_after_a_comment():
+    out = text_of(run(lambda s: s.call_tool("run_query", {"sql":
+        "/* two */ SELECT 1; DROP TABLE raw.payer_claims"})))
+    assert out.startswith("error:") and "single statement" in out
+
+
+# --- logging goes to stderr, never stdout ------------------------------------
+
+def test_diagnostics_never_reach_stdout():
+    """The stdio transport's hardest rule: stdout carries JSON-RPC frames only.
+
+    Every test above would still pass if the server logged to stdout — the
+    client would just see corrupt frames intermittently. Drive a session at
+    DEBUG (the noisiest setting) and assert the session still completes, then
+    assert the log records themselves went to stderr.
+    """
+    import os
+    import subprocess
+
+    env = os.environ | {"REINA_LOG_LEVEL": "DEBUG"}
+    params = StdioServerParameters(
+        command=sys.executable, args=[str(SERVER)], cwd=str(ROOT), env=env
+    )
+
+    async def main():
+        with anyio.fail_after(TIMEOUT):
+            async with stdio_client(params, errlog=subprocess.DEVNULL) as (r, w):
+                async with ClientSession(r, w) as session:
+                    await session.initialize()
+                    res = await session.call_tool(
+                        "run_query", {"sql": "SELECT 1 AS n"})
+                    return text_of(res)
+
+    # a corrupted stdout stream shows up as a handshake or parse failure here
+    assert anyio.run(main).splitlines()[1].strip() == "1"
+
+    # and independently: the startup banner must appear on stderr
+    proc = subprocess.run(
+        [sys.executable, str(SERVER)], cwd=str(ROOT), env=env,
+        input="", capture_output=True, text=True, timeout=TIMEOUT,
+    )
+    assert "starting reina-firme-analytics" in proc.stderr
+    assert "starting reina-firme-analytics" not in proc.stdout
