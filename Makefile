@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs build test evals analysis serve all
+.PHONY: check profile extract load marts docs build test evals identity-quality benchmark analysis serve all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
@@ -23,6 +23,12 @@ test:         ## warehouse integrity + MCP guardrails (no LLM, fast)
 
 evals:        ## agent-level evals through the MCP tools (needs an Anthropic credential)
 	uv run python evals/run.py
+
+identity-quality: ## measure crosswalk precision + recall (no API needed)
+	uv run python evals/identity_quality.py
+
+benchmark:    ## time the query path: marts vs raw vs Redshift
+	uv run python evals/query_path_benchmark.py
 
 analysis:     ## re-run the strategy analyses and print every number
 	uv run python analysis/run.py
