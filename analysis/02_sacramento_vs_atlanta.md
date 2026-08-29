@@ -30,6 +30,12 @@ different table with a different grain — which gives CV 1.27% and max/min
 1.068. Two unrelated sources agreeing on near-uniformity is not a
 coincidence of one bad extract.
 
+The same flatness holds for the hospital metrics: OR utilization spans
+51.7-54.6% across the 8 owned hospitals (max/min 1.056) and bed occupancy
+54.1-55.4% (max/min 1.024). Note the OR denominator: distinct `or_room` x
+*actual* operating days (~270-290/yr) x 10h. Using 365 days understates every
+facility to 40.4-41.5% without changing the spread.
+
 ## 2. The size-matched pair differs by 0.4%
 
 "Similar size" made precise: the Sacramento and Atlanta clinics whose

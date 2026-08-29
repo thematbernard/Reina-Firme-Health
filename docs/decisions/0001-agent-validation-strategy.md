@@ -1,7 +1,7 @@
 # ADR 0001 — How we validate the agent path
 
 - **Date:** 2026-08-29
-- **Status:** Accepted
+- **Status:** Accepted — executed 2026-08-29, outcome recorded below
 - **Context:** Reina Firme strategy engine (Vi applied-AI assessment)
 
 ## Context
@@ -125,3 +125,60 @@ deliverable. Validation is bounded here on purpose.
 - The demo format changes from live to recorded → B's transport coverage
   becomes less urgent, but the recording must then be made against the real
   stdio server, not the eval harness.
+
+
+---
+
+## Outcome (recorded 2026-08-29, after execution)
+
+**C ran. Both demo questions passed.** The cold agent, restricted to the four
+MCP tools and blocked from the filesystem, used 29 tool calls in ~4 minutes and:
+
+- **Q2 (bad premise): passed.** Independently reproduced CV 0.68%, max/min
+  1.029, and the 0.4% size-matched gap; rejected the premise; added a
+  monthly-time-trend cross-check we had not run. Independently rediscovered
+  caveats C1 and C5 from the data.
+- **Q1: passed, and exceeded our own half-finished answer** — Haversine distance
+  analysis (Sacramento median 75.6 mi to acute care, 95.7% over 30 mi, the
+  network's worst by a wide margin), the Oakland discriminator (also
+  hospital-less but 12.6 mi from a fallback), a Sacramento-Stockton-Modesto
+  corridor framing (102,540 members, ~12% acute retention), and a service-line
+  split showing hospital lines at ~12% retention against ambulatory at ~72%.
+
+**The decision paid for itself three times over**, in ways an author-graded
+eval could not have:
+
+1. **It found a real error in our semantic layer.** Dictionary rule R3 claimed
+   owned care costs "~35% less than partner, ~60% less than out-of-network" —
+   inherited hearsay, never measured. Measured: **~30% and ~45%**. More
+   importantly the agent found *where* the saving lives: average
+   `allowed_amount` is flat across network status (~$951-957), so any leakage
+   opportunity sized from allowed dollars shows no benefit at all. The
+   difference is in `plan_paid / allowed_amount` — 0.44 owned, 0.624 partner,
+   0.80 out-of-network. Now dictionary rule **R6**, with a regression test.
+2. **It corrected a metric denominator.** Our OR utilization used a 365-day
+   year; ORs actually run ~270-290 days. Real utilization is **51.7-54.6%**,
+   not 40.4-41.5%. The uniformity conclusion is unchanged (max/min 1.056), but
+   the number was wrong in the dictionary and the analysis.
+3. **It produced a new caveat we had missed.** Owned dollar share is uniform at
+   61.3-62.4% in *every* city, so it carries no cross-market signal — markets
+   must be ranked on geography. Now caveat **C6**, with a test.
+
+**And it produced one wrong claim, which is why verification is not optional.**
+The agent proposed that the "40%" figure came from dividing city volume by
+*unfiltered* facility rows. Checked: that error makes Sacramento look ~28%
+**higher** than Atlanta (10,308 vs 8,047 per clinic), not 40% lower. Refuted,
+and pinned with a regression test so it cannot be re-adopted. A confident,
+well-argued, plausible-sounding, wrong hypothesis is exactly the failure mode
+this whole test architecture exists to catch — including when the agent is
+right about everything else.
+
+**The limitation we predicted was confirmed, unprompted.** The agent itself
+flagged that `get_data_dictionary` embeds prior conclusions in its caveats
+(C2/C2b state the Sacramento answer), so it "can't claim to have been blind to
+the expected conclusion." That is the ADR's stated limitation, verified from the
+inside. It does not invalidate the run — steering the agent correctly *is* the
+product — but the write-up must not claim unaided discovery.
+
+Test count went 81 -> 85. Remaining gap unchanged: **nothing has yet exercised
+MCP stdio**, which still needs a human running `make serve` from a real client.

@@ -288,3 +288,84 @@ def test_sacramento_out_of_market_leakage(con):
     ).fetchall())
     assert rows["Sacramento"] == pytest.approx(82.9, abs=1.0)
     assert rows["Atlanta"] == pytest.approx(31.0, abs=1.0)
+
+
+# --- claims added after the cold-agent validation run (ADR 0001) -------------
+
+def test_r6_savings_live_in_plan_paid_not_allowed(con):
+    """Dictionary rule R6. avg allowed_amount is flat across network status, so
+    a leakage opportunity sized from allowed dollars shows no benefit. The
+    plan_paid ratio is where the difference is."""
+    rows = dict(
+        (ns, (a, r)) for ns, a, r in con.execute(
+            """SELECT network_status, avg(allowed_amount),
+                      avg(plan_paid / nullif(allowed_amount, 0))
+               FROM raw.payer_claims WHERE service_date >= DATE '2025-06-01'
+               GROUP BY 1"""
+        ).fetchall()
+    )
+    allowed = [a for a, _ in rows.values()]
+    assert max(allowed) / min(allowed) < 1.02, "allowed_amount is no longer flat"
+    assert rows["owned"][1] == pytest.approx(0.44, abs=0.02)
+    assert rows["in_network_partner"][1] == pytest.approx(0.624, abs=0.02)
+    assert rows["out_of_network"][1] == pytest.approx(0.80, abs=0.02)
+
+
+def test_c6_owned_dollar_share_is_uniform_across_markets(con):
+    """Caveat C6: owned share carries no cross-market signal (61-63% everywhere),
+    so market ranking must use geographic measures instead."""
+    shares = [r[0] for r in con.execute(
+        """WITH mm AS (SELECT member_id, city FROM raw.payer_members)
+           SELECT 100.0 * sum(CASE WHEN f.ownership='owned' THEN c.allowed_amount ELSE 0 END)
+                  / sum(c.allowed_amount)
+           FROM raw.payer_claims c JOIN mm USING (member_id)
+           JOIN raw.ops_facilities f ON f.facility_id = c.facility_id
+           GROUP BY mm.city HAVING count(*) > 200000"""
+    ).fetchall()]
+    assert max(shares) - min(shares) < 2.0, (
+        f"owned share now spans {min(shares):.1f}-{max(shares):.1f}% — C6 may be stale"
+    )
+
+
+def test_sacramento_is_the_access_outlier(con):
+    """The Q1 recommendation rests on this: Sacramento members travel a median
+    ~76 miles for acute care, far worse than anywhere else, while Oakland (also
+    hospital-less) has a ~13 mile fallback."""
+    rows = dict(con.execute(
+        """WITH mem AS (
+             SELECT member_id, city, latitude lat, longitude lon FROM raw.payer_members
+             WHERE enrollment_date <= current_date
+               AND (termination_date IS NULL OR termination_date > current_date)),
+           d AS (
+             SELECT m.city, 3959 * 2 * asin(sqrt(
+                      pow(sin(radians(f.latitude - m.lat) / 2), 2)
+                    + cos(radians(m.lat)) * cos(radians(f.latitude))
+                      * pow(sin(radians(f.longitude - m.lon) / 2), 2))) mi
+             FROM raw.payer_claims c JOIN mem m USING (member_id)
+             JOIN raw.ops_facilities f ON f.facility_id = c.facility_id
+             WHERE c.service_date >= DATE '2025-06-01'
+               AND c.service_line IN ('surgery','cardiology','er','oncology'))
+           SELECT city, median(mi) FROM d GROUP BY 1 HAVING count(*) > 20000"""
+    ).fetchall())
+    assert rows["Sacramento"] == pytest.approx(75.6, abs=2.0)
+    assert rows["Oakland"] < 20.0
+    assert rows["Sacramento"] == max(rows.values()), "Sacramento no longer the worst"
+
+
+def test_facility_count_error_does_not_explain_the_40pct(con):
+    """A rejected hypothesis, pinned so it does not get re-adopted: dividing
+    city volume by UNFILTERED facility rows makes Sacramento look ~28% HIGHER
+    than Atlanta, not 40% lower. It cannot be the source of the claim."""
+    rows = dict(con.execute(
+        """WITH v AS (
+             SELECT f.city, count(*) FILTER (WHERE a.status='completed') completed
+             FROM raw.ops_appointments a JOIN raw.ops_facilities f USING (facility_id)
+             WHERE f.facility_type='clinic' AND f.city IN ('Sacramento','Atlanta')
+             GROUP BY 1),
+           n AS (SELECT city, count(*) n_all FROM raw.ops_facilities
+                 WHERE facility_type='clinic' GROUP BY 1)
+           SELECT v.city, v.completed * 1.0 / n.n_all FROM v JOIN n USING (city)"""
+    ).fetchall())
+    assert rows["Sacramento"] > rows["Atlanta"], (
+        "unfiltered facility counts favour Sacramento — this cannot produce -40%"
+    )

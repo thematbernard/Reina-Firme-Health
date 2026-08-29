@@ -35,7 +35,8 @@ during the ops window at all. Per-column observed ranges are in `schema.md`.
 **R3. Owned vs partner.** `raw.ops_facilities.ownership` ∈ {`owned`,`partner`}.
 The table holds **all 284** facilities. Any "our network" metric must filter
 `ownership='owned'`, or partner sites inflate the denominator (see C5).
-Owned care costs ~35% less than partner and ~60% less than out-of-network.
+Owned care costs **~30% less than partner and ~45% less than out-of-network**
+(measured; see R6 for why this must be read off `plan_paid`, not `allowed_amount`).
 
 **R4. Leakage** = volume or dollars going to `ownership='partner'` (or
 out-of-network per `payer_claims.network_status`) for a service the owned
@@ -46,6 +47,14 @@ network offers in that market. Compare like to like: check
 `billed_amount`, `allowed_amount`, `plan_paid` and `member_paid`. Use
 `allowed_amount` for economic volume and `plan_paid` for Reina Firme's own
 cost. Never sum `billed_amount` — it is list price, not money that moved.
+
+**R6. Savings live in `plan_paid`, not `allowed_amount`.** Average
+`allowed_amount` is essentially identical across network status (~$951 owned,
+~$957 partner, ~$955 out-of-network), so any "cost of leakage" computed from
+allowed dollars will show no benefit to insourcing. The difference is in the
+share Reina Firme pays: `plan_paid / allowed_amount` is **0.44 owned, 0.624
+partner, 0.80 out-of-network**. Reprice leaked volume at the owned ratio to size
+a recapture opportunity.
 
 ## Metric definitions (canonical — do not invent alternatives)
 
@@ -94,8 +103,10 @@ provider↔facility assignment.
 **C2. Per-facility volume is near-uniform, so large utilization gaps are not
 constructible.** Completed appointments across all 64 owned clinics: mean
 18,038, sd 122, CV **0.68%**, max/min **1.029**. EHR encounters agree
-independently (CV 1.27%, max/min 1.068). OR utilization spans 40.4-41.5% across
-the 8 hospitals; bed occupancy 54.1-55.4%. The widest gap between any two
+independently (CV 1.27%, max/min 1.068). OR utilization spans 51.7-54.6% across
+the 8 hospitals on the correct denominator (distinct `or_room` x actual operating
+days x 10h; ~270-290 operating days per year, NOT 365 — using 365 understates it
+to 40.4-41.5%). Bed occupancy 54.1-55.4%. The widest gap between any two
 facilities on any volume measure is under 7%.
 
 Consequence: **if asked to explain a 40% utilization gap, do not manufacture
@@ -123,6 +134,14 @@ null (not directed to an in-network facility).
 clinics but 7 rows in `ops_facilities`; Atlanta 8 owned but 18 rows. Counting
 facilities per city without `ownership='owned'` inflates the owned footprint by
 2–3x and understates per-facility volume by the same factor.
+
+**C6. Owned-vs-partner dollar share is uniform network-wide — it carries no
+cross-market signal.** Share of member allowed dollars at owned facilities sits
+between 61.3% and 62.4% in *every* city. Do not rank markets by owned share, or
+by partner/leakage share, and do not read a 0.5pp difference as a finding. The
+measures that genuinely vary by market are **geographic**: in-market retention,
+distance to the serving facility, and owned facility composition by type. Build
+market comparisons on those.
 
 ## Where to look things up
 
