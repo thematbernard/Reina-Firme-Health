@@ -3,6 +3,7 @@ name = "reina-firme-strategy-engine"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "anthropic>=1.2.0",
     "duckdb>=1.5.5",
     "mcp>=2.1.1",
     "pandas>=3.0.5",

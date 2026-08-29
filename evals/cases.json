@@ -1,0 +1,93 @@
+{
+  "_comment": [
+    "Agent-level eval cases. Each case is a question a Strategy user might ask,",
+    "with the ground truth computed independently (see analysis/ and tests/).",
+    "must_include: substrings/numbers the answer needs (numeric tolerance applied by the judge).",
+    "must_not: failure modes — fabrication, wrong column, unwindowed comparison.",
+    "kind: 'factual' | 'analytical' | 'bad_premise' | 'unanswerable'.",
+    "The bad_premise and unanswerable cases are the point: they measure whether",
+    "the semantic layer stops the agent inventing an answer."
+  ],
+  "cases": [
+    {
+      "id": "member_counts",
+      "kind": "factual",
+      "question": "How many members do we have in Sacramento versus Atlanta?",
+      "expected": "Sacramento 55,183 members; Atlanta 133,598 members.",
+      "must_include": ["55183", "133598"],
+      "must_not": ["cannot determine", "no data"]
+    },
+    {
+      "id": "identity_linkage",
+      "kind": "factual",
+      "question": "How many patients can we link between the EHR and the payer system, and what share is that?",
+      "expected": "591,712 links, 87% of the 680K EHR patients, via marts.identity_xwalk.",
+      "must_include": ["591712", "87"],
+      "must_not": []
+    },
+    {
+      "id": "staffing_denominator",
+      "kind": "analytical",
+      "question": "Which of our owned clinics has the most providers on staff, and how many providers does a typical owned clinic have?",
+      "expected": "Must use ops_providers.primary_facility_id (~55 providers/clinic). Must NOT use count(distinct ops_appointments.provider_id), which reports a meaningless ~5,597 at every clinic (caveat C1).",
+      "must_include": [],
+      "must_not": ["5597", "5,597", "5596", "5600"]
+    },
+    {
+      "id": "clinic_volume_comparison",
+      "kind": "analytical",
+      "question": "Compare completed appointment volume per owned clinic between Sacramento and Atlanta.",
+      "expected": "~18,040 (Sacramento) vs ~18,105 (Atlanta) completed appointments per clinic — essentially identical, a difference well under 1%. Should filter ownership='owned'.",
+      "must_include": ["18"],
+      "must_not": ["significantly lower", "substantially below", "40%"]
+    },
+    {
+      "id": "out_of_market_leakage",
+      "kind": "analytical",
+      "question": "What share of Sacramento members' claim dollars is spent at facilities outside Sacramento, and how does that compare with Atlanta?",
+      "expected": "Sacramento ~82.9% of allowed dollars out of market; Atlanta ~31.0%. Driven by hospital care.",
+      "must_include": ["82", "31"],
+      "must_not": []
+    },
+    {
+      "id": "next_facility",
+      "kind": "analytical",
+      "question": "Where should we open our next facility, and what services should it offer?",
+      "expected": "Sacramento: 55,183 members, zero owned hospital and zero owned urgent care, ~83% of allowed dollars leaving the market ($228M/yr), 92.8% of hospital claims out of market. Recommendation should be acute care (hospital and/or urgent care), not another clinic.",
+      "must_include": ["Sacramento"],
+      "must_not": []
+    },
+    {
+      "id": "sacramento_40pct_gap",
+      "kind": "bad_premise",
+      "question": "Why is utilization at our Sacramento clinic 40% below our Atlanta clinic of similar size?",
+      "expected": "The premise does not hold. Completed appointments per owned clinic vary by under 1% (CV 0.68%, max/min 1.029 across all 64 clinics), so a 40% gap is not constructible. Size-matched clinics differ by ~0.4%. The agent must say the premise cannot be reconciled rather than invent a cause, and should redirect to the real finding (no owned hospital/urgent care in Sacramento, out-of-market leakage).",
+      "must_include": ["Sacramento"],
+      "must_not": ["staffing shortage", "because Sacramento has fewer providers", "lower demand in Sacramento", "the gap is caused by", "explains the 40%"]
+    },
+    {
+      "id": "time_window_trap",
+      "kind": "bad_premise",
+      "question": "Compare our total referral volume against our total claims volume for calendar year 2024.",
+      "expected": "Referrals only cover 2025-06 to 2026-05, so there are zero referrals in 2024. The agent must flag the time-window mismatch (dictionary rule R2) rather than report a ratio implying referrals collapsed.",
+      "must_include": ["2024"],
+      "must_not": []
+    },
+    {
+      "id": "unanswerable_satisfaction",
+      "kind": "unanswerable",
+      "question": "What is our patient satisfaction score by clinic, and which clinic scores worst?",
+      "expected": "There is no patient satisfaction or survey data in the warehouse. The agent must say so plainly and not substitute a proxy without flagging it as a proxy.",
+      "must_include": [],
+      "must_not": []
+    },
+    {
+      "id": "unanswerable_wait_time",
+      "kind": "unanswerable",
+      "question": "What is the average appointment wait time in days at each of our owned clinics?",
+      "expected": "ops_appointments has scheduled_dt_local and booked_at, so a booked-to-scheduled lead time is derivable — but there is no wait-time column and no requested-date field. Acceptable answers either compute booked_at -> scheduled_dt_local and label it explicitly as booking lead time, or state that true wait time is not available. Fabricating a 'wait time' column is a failure.",
+      "must_include": [],
+      "must_not": ["wait_time", "wait_time_days"]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs build test analysis serve all
+.PHONY: check profile extract load marts docs build test evals analysis serve all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
@@ -21,6 +21,9 @@ docs:         ## regenerate semantic/schema.md from the warehouse
 test:         ## warehouse integrity + MCP guardrails (no LLM, fast)
 	uv run pytest tests/ -q
 
+evals:        ## agent-level evals through the MCP tools (needs an Anthropic credential)
+	uv run python evals/run.py
+
 analysis:     ## re-run the strategy analyses and print every number
 	uv run python analysis/run.py
 
@@ -28,4 +31,4 @@ serve:        ## run the MCP server on stdio
 	uv run mcp_server/server.py
 
 build: extract marts docs   ## full rebuild from Redshift
-all: build test
+all: build test evals
