@@ -91,13 +91,24 @@ total). This column cannot support provider productivity, staffing, panel or
 capacity analysis. `ops_providers.primary_facility_id` is the real
 provider↔facility assignment.
 
-**C2. Owned-clinic appointment volume is near-uniform.** Completed
-appointments per owned clinic sit at ~18,000 with a ~43% completion rate at
-*every* clinic — Sacramento ~18,040, Atlanta ~18,100. A raw appointment-count
-utilization metric shows **no Sacramento/Atlanta gap**. If asked to explain a
-40% utilization gap, do not manufacture one from this table; state that it does
-not appear here and look at OR minutes, bed census, referral leakage or claims
-per eligible member month instead.
+**C2. Per-facility volume is near-uniform, so large utilization gaps are not
+constructible.** Completed appointments across all 64 owned clinics: mean
+18,038, sd 122, CV **0.68%**, max/min **1.029**. EHR encounters agree
+independently (CV 1.27%, max/min 1.068). OR utilization spans 40.4-41.5% across
+the 8 hospitals; bed occupancy 54.1-55.4%. The widest gap between any two
+facilities on any volume measure is under 7%.
+
+Consequence: **if asked to explain a 40% utilization gap, do not manufacture
+one.** Report that the premise does not reconcile. Any large gap you can
+produce comes from the denominator, not the numerator — panel-normalized
+utilization has a 3.18x spread purely because panel size varies while
+throughput does not. See `analysis/02_sacramento_vs_atlanta.md`.
+
+**C2b. Sacramento vs Atlanta specifically.** Size-matched clinics differ by
+0.4%, and Sacramento sits at or above Atlanta on every normalized measure. The
+real Sacramento finding is network composition: 55,183 members, zero owned
+hospital and zero owned urgent care, 92.8% of hospital claims leaving the
+market, $228M/yr of allowed spend going out of market vs Atlanta's 31%.
 
 **C3. Future-dated rows exist.** `payer_members.dob` and `enrollment_date`
 extend to 2026-12-28, and `termination_date`/`eligibility.end_date` to 2030.

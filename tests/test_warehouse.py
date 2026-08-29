@@ -228,3 +228,63 @@ def test_dictionary_defers_column_facts_to_generated_schema():
     # no line may enumerate a long comma-separated column list (the old pattern)
     for i, line in enumerate(text.splitlines(), 1):
         assert line.count(",") < 5, f"dictionary.md:{i} looks like a column list"
+
+
+# --- analysis findings must stay reproducible --------------------------------
+# These pin the conclusions in analysis/02_sacramento_vs_atlanta.md. If the
+# warehouse is rebuilt and these move, the analysis prose is stale.
+
+def test_clinic_throughput_is_uniform(con):
+    """Caveat C2, and the whole basis of the Sacramento conclusion: no two of
+    the 64 owned clinics differ by more than ~3% in completed appointments, so
+    a 40% utilization gap is not constructible from throughput."""
+    n, cv, ratio = con.execute(
+        """WITH v AS (
+             SELECT count(*) FILTER (WHERE a.status='completed') c
+             FROM raw.ops_appointments a JOIN raw.ops_facilities f USING (facility_id)
+             WHERE f.ownership='owned' AND f.facility_type='clinic'
+             GROUP BY f.facility_id)
+           SELECT count(*), 100.0*stddev(c)/avg(c), max(c)*1.0/min(c) FROM v"""
+    ).fetchone()
+    assert n == 64
+    assert cv < 2.0, f"clinic throughput CV now {cv:.2f}% — caveat C2 may be stale"
+    assert ratio < 1.10, f"max/min now {ratio:.3f} — a real utilization gap may exist"
+
+
+def test_size_matched_pair_has_no_gap(con):
+    """The size-matched Sacramento/Atlanta clinics differ by <2% in completed
+    appointments — the direct refutation of the 40% premise."""
+    rows = dict(con.execute(
+        """SELECT facility_id, count(*) FILTER (WHERE status='completed')
+           FROM raw.ops_appointments
+           WHERE facility_id IN ('FAC-00015','FAC-00052') GROUP BY 1"""
+    ).fetchall())
+    sac, atl = rows["FAC-00015"], rows["FAC-00052"]
+    assert abs(sac - atl) / atl < 0.02, f"Sacramento {sac} vs Atlanta {atl}"
+
+
+def test_sacramento_has_no_owned_acute_care(con):
+    """The real finding: Sacramento has clinics but no owned hospital or
+    urgent care, which is what drives its out-of-market leakage."""
+    got = dict(con.execute(
+        "SELECT facility_type, count(*) FROM raw.ops_facilities "
+        "WHERE ownership='owned' AND city='Sacramento' GROUP BY 1"
+    ).fetchall())
+    assert got.get("hospital", 0) == 0 and got.get("urgent_care", 0) == 0
+    assert got["clinic"] == 4
+
+
+def test_sacramento_out_of_market_leakage(con):
+    """Sacramento sends ~83% of allowed dollars out of market vs Atlanta's ~31%."""
+    rows = dict(con.execute(
+        """WITH mm AS (SELECT member_id, city mc FROM raw.payer_members
+                       WHERE city IN ('Sacramento','Atlanta'))
+           SELECT mm.mc,
+                  100.0*sum(CASE WHEN f.city <> mm.mc THEN c.allowed_amount ELSE 0 END)
+                        / sum(c.allowed_amount)
+           FROM raw.payer_claims c JOIN mm USING (member_id)
+           JOIN raw.ops_facilities f ON f.facility_id = c.facility_id
+           GROUP BY 1"""
+    ).fetchall())
+    assert rows["Sacramento"] == pytest.approx(82.9, abs=1.0)
+    assert rows["Atlanta"] == pytest.approx(31.0, abs=1.0)

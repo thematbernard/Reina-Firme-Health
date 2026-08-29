@@ -21,6 +21,9 @@ docs:         ## regenerate semantic/schema.md from the warehouse
 test:         ## warehouse integrity + MCP guardrails (no LLM, fast)
 	uv run pytest tests/ -q
 
+analysis:     ## re-run the strategy analyses and print every number
+	uv run python analysis/run.py
+
 serve:        ## run the MCP server on stdio
 	uv run mcp_server/server.py
 
