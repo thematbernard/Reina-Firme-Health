@@ -102,3 +102,18 @@ def test_benchmark_disables_redshift_result_cache(bench):
     row scan) and the whole comparison is meaningless."""
     src = (ROOT / "evals" / "query_path_benchmark.py").read_text()
     assert "enable_result_cache_for_session TO off" in src
+
+
+def test_readme_links_resolve():
+    """A broken link in the front-door document is the cheapest possible own
+    goal, and it happened once already while drafting."""
+    import re
+
+    readme = (ROOT / "README.md").read_text()
+    missing = []
+    for target in re.findall(r"\]\(([^)]+)\)", readme):
+        if target.startswith(("http", "#", "mailto:")):
+            continue
+        if not (ROOT / target.split("#")[0]).exists():
+            missing.append(target)
+    assert not missing, f"README links to nonexistent paths: {missing}"

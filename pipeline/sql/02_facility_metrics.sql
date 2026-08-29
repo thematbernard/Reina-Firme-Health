@@ -29,8 +29,9 @@ panel AS (
     SELECT p.primary_facility_id AS facility_id,
            count(m.member_id)                                 AS panel_total,
            count(m.member_id) FILTER (
-               WHERE m.termination_date IS NULL
-                  OR m.termination_date > current_date)        AS panel_active
+               WHERE m.enrollment_date <= current_date
+                 AND (m.termination_date IS NULL
+                      OR m.termination_date > current_date))    AS panel_active
     FROM raw.ops_providers p
     LEFT JOIN raw.payer_members m ON m.primary_pcp_provider_id = p.provider_id
     GROUP BY 1),

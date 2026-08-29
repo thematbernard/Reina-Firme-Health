@@ -24,8 +24,13 @@ CREATE OR REPLACE TABLE marts.market_summary AS
 WITH win AS (SELECT DATE '2025-06-01' AS lo, DATE '2026-06-01' AS hi),
 acute AS (SELECT ['surgery', 'cardiology', 'er', 'oncology'] AS lines),
 mem AS (
+    -- is_active applies caveat C3 on BOTH ends: enrollment_date and
+    -- termination_date both run into the future in this data (to 2026-12 and
+    -- 2030 respectively), so filtering only the termination side counts members
+    -- who have not started yet.
     SELECT member_id, city, state, latitude AS lat, longitude AS lon,
-           (termination_date IS NULL OR termination_date > current_date) AS is_active
+           (enrollment_date <= current_date
+            AND (termination_date IS NULL OR termination_date > current_date)) AS is_active
     FROM raw.payer_members),
 members AS (
     SELECT city, any_value(state) AS state,
