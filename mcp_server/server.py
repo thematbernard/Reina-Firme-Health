@@ -16,6 +16,7 @@ from mcp.server.mcpserver import MCPServer
 ROOT = Path(__file__).parent.parent
 DB = ROOT / "data" / "warehouse.duckdb"
 DICTIONARY = ROOT / "semantic" / "dictionary.md"
+SCHEMA = ROOT / "semantic" / "schema.md"
 
 MAX_ROWS = 500
 ALLOWED_START = re.compile(r"^\s*(WITH|SELECT|DESCRIBE|SHOW|SUMMARIZE|EXPLAIN)\b", re.IGNORECASE)
@@ -24,8 +25,9 @@ mcp = MCPServer(
     "reina-firme-analytics",
     instructions=(
         "Analytics warehouse for Reina Firme Health (integrated payer+provider). "
-        "ALWAYS call get_data_dictionary first: it contains the table map, canonical "
-        "metric definitions, join paths, and time-window caveats you must follow."
+        "ALWAYS call get_data_dictionary first: it contains the generated column "
+        "reference, canonical metric definitions, join paths, and measured "
+        "data-quality caveats you must follow. Do not guess column names."
     ),
 )
 
@@ -49,9 +51,13 @@ def _format(cols, rows, truncated: bool) -> str:
 
 @mcp.tool()
 def get_data_dictionary() -> str:
-    """The semantic layer: full table map, canonical metric definitions (utilization,
-    leakage), join paths, and time-window caveats. Read this before writing any SQL."""
-    return DICTIONARY.read_text()
+    """The semantic layer, in two parts: hand-written business rules (identity,
+    time windows, canonical metric definitions, measured data-quality caveats)
+    followed by the GENERATED schema reference (every table's real columns,
+    types, date ranges and join paths). Read this before writing any SQL — the
+    column names here are generated from the warehouse, so trust them over
+    anything you remember."""
+    return DICTIONARY.read_text() + "\n\n---\n\n" + SCHEMA.read_text()
 
 
 @mcp.tool()
@@ -60,7 +66,7 @@ def list_tables() -> str:
     con = _connect()
     rows = con.execute(
         """
-        SELECT table_schema || '.' || table_name AS tbl,
+        SELECT schema_name || '.' || table_name AS tbl,
                coalesce(estimated_size, 0) AS approx_rows
         FROM duckdb_tables()
         UNION ALL

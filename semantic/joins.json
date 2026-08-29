@@ -1,0 +1,35 @@
+{
+  "_comment": [
+    "Canonical join paths for the Reina Firme warehouse. Single source of truth:",
+    "05_gen_schema_doc.py renders these into semantic/schema.md, and",
+    "tests/test_warehouse.py asserts each one executes with zero orphans.",
+    "A join path can therefore never drift from the data without a test failing.",
+    "nullable_pct: expected share of NULL FK values (legitimately absent, not broken)."
+  ],
+  "joins": [
+    {"left": "raw.payer_claims", "left_col": "member_id", "right": "raw.payer_members", "right_col": "member_id", "note": "claims -> member demographics/geography"},
+    {"left": "raw.payer_claims", "left_col": "facility_id", "right": "raw.ops_facilities", "right_col": "facility_id", "note": "claims -> facility, for owned/partner and city"},
+    {"left": "raw.payer_claims", "left_col": "provider_id", "right": "raw.ops_providers", "right_col": "provider_id"},
+    {"left": "raw.ehr_encounters", "left_col": "patient_id", "right": "raw.ehr_patients", "right_col": "patient_id"},
+    {"left": "raw.ehr_encounters", "left_col": "facility_id", "right": "raw.ops_facilities", "right_col": "facility_id"},
+    {"left": "raw.ehr_procedures", "left_col": "patient_id", "right": "raw.ehr_patients", "right_col": "patient_id"},
+    {"left": "raw.ehr_conditions", "left_col": "patient_id", "right": "raw.ehr_patients", "right_col": "patient_id"},
+    {"left": "raw.ops_appointments", "left_col": "member_id", "right": "raw.payer_members", "right_col": "member_id", "note": "appointments key on member_id, NOT patient_id — no crosswalk needed"},
+    {"left": "raw.ops_appointments", "left_col": "facility_id", "right": "raw.ops_facilities", "right_col": "facility_id"},
+    {"left": "raw.ops_appointments", "left_col": "provider_id", "right": "raw.ops_providers", "right_col": "provider_id", "note": "see caveat C1: this assignment is not a real staffing signal"},
+    {"left": "raw.ops_referrals", "left_col": "member_id", "right": "raw.payer_members", "right_col": "member_id"},
+    {"left": "raw.ops_referrals", "left_col": "referred_to_facility_id", "right": "raw.ops_facilities", "right_col": "facility_id", "nullable_pct": 22.0, "note": "NULL = referral not directed to a Reina Firme in-network facility"},
+    {"left": "raw.ops_or_schedule", "left_col": "facility_id", "right": "raw.ops_facilities", "right_col": "facility_id"},
+    {"left": "raw.ops_bed_census_daily", "left_col": "facility_id", "right": "raw.ops_facilities", "right_col": "facility_id"},
+    {"left": "raw.ops_providers", "left_col": "primary_facility_id", "right": "raw.ops_facilities", "right_col": "facility_id", "note": "the ONLY trustworthy provider->facility assignment"},
+    {"left": "raw.pharmacy_rx_claims", "left_col": "member_id", "right": "raw.payer_members", "right_col": "member_id"},
+    {"left": "raw.payer_member_eligibility_history", "left_col": "member_id", "right": "raw.payer_members", "right_col": "member_id"},
+    {"left": "raw.payer_members", "left_col": "plan_id", "right": "raw.payer_plans", "right_col": "plan_id"},
+    {"left": "raw.payer_members", "left_col": "employer_id", "right": "raw.payer_employers", "right_col": "employer_id", "nullable_pct": 35.0, "note": "NULL = ACA/individual member, not employer group"},
+    {"left": "raw.outreach_program_enrollments", "left_col": "member_id", "right": "raw.payer_members", "right_col": "member_id"},
+    {"left": "raw.outreach_program_enrollments", "left_col": "program_id", "right": "raw.outreach_wellness_programs", "right_col": "program_id"},
+    {"left": "raw.external_drive_time_isochrones", "left_col": "facility_id", "right": "raw.ops_facilities", "right_col": "facility_id"},
+    {"left": "marts.identity_xwalk", "left_col": "patient_id", "right": "raw.ehr_patients", "right_col": "patient_id"},
+    {"left": "marts.identity_xwalk", "left_col": "member_id", "right": "raw.payer_members", "right_col": "member_id"}
+  ]
+}

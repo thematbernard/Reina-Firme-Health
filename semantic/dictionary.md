@@ -1,101 +1,128 @@
-# Reina Firme Health — Data Dictionary & Semantic Layer
+# Reina Firme Health — Semantic Layer
 
-Local DuckDB snapshot of Reina Firme's warehouse (extracted 2026-08-28).
-Reina Firme is an integrated payer + provider: ~1.1M members, care delivered at
-84 owned facilities (8 hospitals, 64 clinics, 12 urgent cares) in Northern
-California, Greater Atlanta, and Central Texas, plus ~200 partner facilities.
+Hand-written business semantics for the local DuckDB warehouse
+(`data/warehouse.duckdb`, extracted 2026-08-28).
+
+**Column lists and date ranges are NOT in this file.** They live in
+`semantic/schema.md`, which is generated from the warehouse by `make docs`.
+Never trust a remembered column name — check `schema.md` or call
+`describe_table`. (An earlier hand-written version of this file claimed
+`ops_facilities.name` and `ops_appointments.patient_id`; neither exists, and
+the agent emitted broken SQL because it believed them.)
+
+Reina Firme is an integrated payer + provider: 1.1M members, care delivered at
+84 owned facilities (8 hospitals, 64 clinics, 12 urgent cares) across Northern
+California, Greater Atlanta and Central Texas, plus ~200 partner facilities.
 
 ## Critical rules — read before writing SQL
 
-1. **Two identity systems.** `payer.*` tables key on `member_id`; `ehr.*` tables key on
-   `patient_id`. There is NO shared key in the source data. To join across them, ALWAYS
-   go through `marts.identity_xwalk` (patient_id ↔ member_id, 87% of patients linked,
-   `match_method` in: exact, exact_tiebreak, fuzzy).
-2. **Time windows differ by table.** Claims/encounters/procedures/rx: June 2023 – May 2026.
-   Ops tables (appointments, referrals, or_schedule, bed_census_daily): June 2025 – May 2026 ONLY.
-   Never compare a 3-year table against a 1-year table without windowing both to the same range.
-3. **Owned vs partner.** `raw.ops_facilities.ownership` ∈ {'owned','partner'}. Care at owned
-   facilities costs ~35% less than partner, ~60% less than out-of-network. Volume sent to
-   partners when an owned facility could serve it is called **leakage**.
-4. Table names here use the local layout: `raw.<sourceschema>_<table>` (views over parquet)
-   and `marts.<table>` (derived). E.g. Redshift's `payer.claims` is `raw.payer_claims`.
+**R1. Two identity systems, and only some tables need the crosswalk.**
+`payer.*` tables key on `member_id`; `ehr.*` tables key on `patient_id`. There
+is no shared key in the source. To join *EHR to payer*, go through
+`marts.identity_xwalk` (591,712 links = 87% of the 680K patients).
+**But `raw.ops_*` tables key on `member_id`, not `patient_id`** — appointments,
+referrals, or_schedule and bed_census join straight to `payer.*` with no
+crosswalk. Using the crosswalk where it isn't needed silently drops the 13% of
+patients that never matched.
+
+**R2. Time windows differ by table — window both sides of any comparison.**
+Claims / encounters / procedures / rx: 2023-06 → 2026-05 (3 years).
+Ops tables (appointments, referrals, or_schedule, bed_census_daily):
+2025-06 → 2026-05 (1 year **only**).
+`ehr_conditions.onset_date` stops at 2023-06 — there are no condition onsets
+during the ops window at all. Per-column observed ranges are in `schema.md`.
+
+**R3. Owned vs partner.** `raw.ops_facilities.ownership` ∈ {`owned`,`partner`}.
+The table holds **all 284** facilities. Any "our network" metric must filter
+`ownership='owned'`, or partner sites inflate the denominator (see C5).
+Owned care costs ~35% less than partner and ~60% less than out-of-network.
+
+**R4. Leakage** = volume or dollars going to `ownership='partner'` (or
+out-of-network per `payer_claims.network_status`) for a service the owned
+network offers in that market. Compare like to like: check
+`ops_facilities.service_lines` before calling something leakage.
+
+**R5. Cost columns are not interchangeable.** `payer_claims` carries
+`billed_amount`, `allowed_amount`, `plan_paid` and `member_paid`. Use
+`allowed_amount` for economic volume and `plan_paid` for Reina Firme's own
+cost. Never sum `billed_amount` — it is list price, not money that moved.
 
 ## Metric definitions (canonical — do not invent alternatives)
 
-- **Utilization (facility):** actual volume / capacity for a period.
-  For ORs: booked minutes / available minutes from `raw.ops_or_schedule`.
-  For clinics: completed appointments from `raw.ops_appointments` (status column) per facility,
-  optionally normalized by provider count or rooms.
-- **Leakage rate:** share of encounters/claims volume (or dollars) at `ownership='partner'`
-  facilities out of total in-network volume, for services the owned network offers.
-- **Eligible member months:** from `raw.payer_member_eligibility_history` between
-  effective_date and termination-equivalent end.
+**Facility utilization** has a different valid denominator per facility type.
+There is no single utilization column.
 
-## Tables
+- **Operating rooms** (hospitals): booked minutes ÷ available minutes.
+  Booked = `date_diff('minute', scheduled_start_dt_local, scheduled_end_dt_local)`
+  from `raw.ops_or_schedule` — there is no pre-computed minutes column.
+  Available = distinct `or_room` per facility × operating days × staffed hours.
+  Exclude cancellations: `actual_start_dt_local IS NULL` marks the ~13% of
+  cases that never ran.
+- **Inpatient beds** (hospitals): `occupied_beds_midnight` ÷ `total_beds` from
+  `raw.ops_bed_census_daily`.
+- **Clinics**: completed appointments (`status='completed'`) from
+  `raw.ops_appointments`. Clinics have NULL `total_beds`/`total_ors`, so there
+  is no capacity column. Valid denominators are providers **based** at the
+  facility (`ops_providers.primary_facility_id`), attributed panel
+  (`payer_members.primary_pcp_provider_id` → provider → facility), or
+  drive-time population. **Never normalize by
+  `count(DISTINCT ops_appointments.provider_id)` — see C1.**
 
-### raw.payer_members (1.1M rows) — one row per insured member
-member_id, name, dob, gender, address + lat/long, phones, email, preferred_language,
-sms_consent, TCPA window, primary_pcp_provider_id, plan_id, employer_id,
-enrollment_channel/date, termination_date (NULL = active).
+**Appointment status** ∈ {`completed`, `booked`, `no_show`,
+`cancelled_by_patient`, `cancelled_by_provider`}. `booked` includes future
+appointments, so a raw completion rate is diluted by the window's tail; filter
+`scheduled_dt_local < current_date` for a realized rate.
 
-### raw.payer_claims (17.1M) — paid claims, service_date 2023-06→2026-05
-member_id, claim/line ids, service_date, facility_id, provider_id, place_of_service,
-cpt/diagnosis codes, service_line, allowed/paid amounts, network_status.
+**Eligible member months**: from `raw.payer_member_eligibility_history`
+between `effective_date` and `end_date` (`end_date IS NULL`, 96% of rows, =
+still covered). Use this as the denominator for any per-member rate — member
+counts alone ignore partial-year coverage.
 
-### raw.payer_plans (42), raw.payer_employers (820), raw.payer_member_eligibility_history (1.5M)
-Plan metadata (LOB: employer group vs ACA), employer groups, coverage spans.
+## Data-quality caveats (measured, not assumed)
 
-### raw.ehr_patients (680K) — one row per patient in the EHR (owned-facility care)
-patient_id, mrn, name, dob, gender, address, primary_provider_id.
+These were found by testing the warehouse. Each one will silently produce a
+wrong answer if ignored.
 
-### raw.ehr_encounters (9.0M) — EHR visits at owned facilities, 2023-06→2026-05
-patient_id, encounter_id, facility_id, provider_id, encounter_type, admission/discharge dt,
-department/service line fields.
+**C1. `ops_appointments.provider_id` is randomly assigned — do not use it.**
+Only **1.2%** of appointments have a provider whose `primary_facility_id`
+matches the appointment's facility; chance alone gives ~1.2% across 84
+facilities. Every clinic therefore shows ~5,597 "distinct providers" (of 14,000
+total). This column cannot support provider productivity, staffing, panel or
+capacity analysis. `ops_providers.primary_facility_id` is the real
+provider↔facility assignment.
 
-### raw.ehr_conditions (719K), raw.ehr_medications (575K), raw.ehr_procedures (6.1M)
-Diagnoses (onset 2019–2023), meds, procedures (CPT) performed at owned facilities.
+**C2. Owned-clinic appointment volume is near-uniform.** Completed
+appointments per owned clinic sit at ~18,000 with a ~43% completion rate at
+*every* clinic — Sacramento ~18,040, Atlanta ~18,100. A raw appointment-count
+utilization metric shows **no Sacramento/Atlanta gap**. If asked to explain a
+40% utilization gap, do not manufacture one from this table; state that it does
+not appear here and look at OR minutes, bed census, referral leakage or claims
+per eligible member month instead.
 
-### raw.ehr_observations_monthly (47.8M) — AGGREGATED labs/vitals
-patient_id × month × LOINC: n_observations, avg_value_numeric, n_abnormal.
-(Raw 70M-row observations table was aggregated during extraction.)
+**C3. Future-dated rows exist.** `payer_members.dob` and `enrollment_date`
+extend to 2026-12-28, and `termination_date`/`eligibility.end_date` to 2030.
+Filter on `current_date` when computing age or active enrollment.
 
-### raw.ops_facilities (284) — ALL facilities, owned and partner
-facility_id, name, facility_type (hospital/clinic/urgent_care/ambulatory_surgery/imaging),
-ownership (owned/partner), address, lat/long, service_lines (delimited string),
-total_beds, total_ors, cost_index.
+**C4. Referral funnels are mostly incomplete.** `ops_referrals.scheduled_dt`
+is 50% null and `completed_dt` 75% null. Treat these as funnel stages, not
+missing data: ~25% of referrals complete. `referred_to_facility_id` is 22%
+null (not directed to an in-network facility).
 
-### raw.ops_providers (14K) — providers with specialty, employment (owned vs partner network)
+**C5. Facility counts must filter `ownership`.** Sacramento has 4 owned
+clinics but 7 rows in `ops_facilities`; Atlanta 8 owned but 18 rows. Counting
+facilities per city without `ownership='owned'` inflates the owned footprint by
+2–3x and understates per-facility volume by the same factor.
 
-### raw.ops_referrals (1.2M) — referrals written, 2025-06→2026-05
-referral_id, member_id, referring_provider_id, referred_to_provider_id,
-referred_to_facility_id, specialty, status, issued/scheduled/completed dt, urgency.
+## Where to look things up
 
-### raw.ops_appointments (3.2M) — appointments at owned facilities, 2025-06→2026-05
-facility_id, provider_id, patient_id, scheduled_dt_local, status (incl. no-shows/cancellations),
-appointment/visit type.
-
-### raw.ops_or_schedule (83K) — OR cases at owned hospitals, 2025-06→2026-05
-facility_id, or room, surgeon_id, scheduled/actual start-end, case type, status
-(incl. cancellations), booked minutes.
-
-### raw.ops_bed_census_daily (18K) — daily census per owned hospital, 2025-06→2026-06
-
-### raw.outreach_wellness_programs (6) — the six wellness programs
-### raw.outreach_program_enrollments (88K) — member_id, program_id, enrollment_dt, status
-
-### raw.external_census_tract_demographics (24K) — tract-level population, age/income mix
-### raw.external_competitor_facilities (2.8K) — non-Reina-Firme facilities with lat/long
-### raw.external_drive_time_isochrones (252) — precomputed drive-time polygons per facility
-
-### raw.pharmacy_rx_claims (11.0M) — fills 2023-06→2026-05: member_id, ndc, prescriber_id, costs
-
-### marts.identity_xwalk (592K) — patient_id ↔ member_id linkage (see rule 1)
-
-## Common join paths
-- claims → members: `raw.payer_claims.member_id = raw.payer_members.member_id`
-- claims → facilities: `raw.payer_claims.facility_id = raw.ops_facilities.facility_id`
-- encounters → facilities: `raw.ehr_encounters.facility_id = raw.ops_facilities.facility_id`
-- EHR ↔ payer: `ehr.patient_id → marts.identity_xwalk → payer.member_id`
-- referrals → destination: `raw.ops_referrals.referred_to_facility_id = ops_facilities.facility_id`
-- geography: members have lat/long and zip; facilities have lat/long;
-  `raw.external_census_tract_demographics` keys on census tract.
+- **Columns, types, row counts, date ranges** → `semantic/schema.md` (generated)
+- **Join paths** → `semantic/joins.json`, rendered with measured orphan counts
+  into `schema.md`. All 24 paths are asserted orphan-free by
+  `tests/test_warehouse.py`.
+- **Identity matching logic** → `pipeline/sql/01_identity_xwalk.sql`
+  (`match_method` ∈ exact / exact_tiebreak / fuzzy; fuzzy is 4,537 links at
+  Jaro-Winkler ≥ 0.92 and is the least trustworthy slice).
+- **Geography**: members and facilities both carry lat/long;
+  `external_census_tract_demographics` keys on `census_tract_geoid` with
+  `polygon_wkt`; `external_drive_time_isochrones` has 252 precomputed polygons
+  (isochrone_minutes per facility).

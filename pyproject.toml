@@ -10,3 +10,8 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "redshift-connector>=2.1.16",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
