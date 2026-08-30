@@ -86,12 +86,30 @@ fingerprint makes that visible (`make fingerprint` vs the `[build ...]` tag in
 the server's instructions) but does not prevent it. A supervisor that restarts
 the server when `server.py` or the semantic layer changes would close it.
 
-## 5. Run the agent evals — harness ready, never executed
+## 5. Agent evals — run at 9/11; close the three gaps it exposed
 
-`evals/run.py` (11 cases: 2 factual, 5 analytical, 2 bad-premise, 2
-unanswerable) has never run — no Anthropic credential is configured here.
-Export a key and `make evals`, then `--reps 3` for variance. Report the failures
-rather than tuning cases until they pass.
+`make evals-cli` executes all 11 cases through `claude -p` over real MCP stdio.
+Result: **9/11** (factual 2/2, analytical 3/5, bad_premise 2/2, unanswerable
+2/2). See [verified-status §5](verified-status.md).
+
+Three follow-ups, in order:
+
+1. **Negation-aware `must_not` matching.** `staffing_denominator` failed on the
+   substring `5,597` in the sentence *"I did not use `provider_id`… it makes
+   every clinic look like it has ~5,597 providers"* — i.e. for correctly naming
+   the trap it avoided. A plain substring check cannot express "asserted as the
+   answer" versus "cited as the wrong answer." Left unfixed on purpose so the
+   reported 9/11 is not the product of adjusting a check after seeing it fire.
+2. **`--reps 3` for variance.** 9/11 is one rep. One run cannot distinguish a
+   reproducible failure from sampling noise.
+3. **Run the sdk path too.** It is a different harness — bare Anthropic loop,
+   `run.py`'s `SYSTEM` prompt, in-process tools — and it also yields itemised
+   tool-call counts, which the cli runner cannot produce.
+
+The one substantive miss, `raw_navigation_prevalence`, is the off-mart `raw.*`
+case: right join path and right coverage caveat, numbers ~8% low from an
+undisclosed enrollment filter plus a broadened code set. It argues for governing
+that path, not for rewriting the case.
 
 Related: re-run the cold-agent probe now that the marts exist. It needed **29
 tool calls** against `raw.*`; the marts should cut that sharply, and tool-call

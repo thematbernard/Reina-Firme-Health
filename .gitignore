@@ -11,4 +11,8 @@ data/
 __pycache__/
 .venv/
 .ipynb_checkpoints/
-evals/results.json
+# evals/results.json was ignored as a transient run artifact. It is now the
+# only evidence behind the 9/11 pass rate quoted in the README, and it is 41 KB
+# of aggregate figures with no member/patient identifiers (scanned). Committed
+# deliberately; re-ignore it only if a run starts carrying row-level output.
+# evals/results.json

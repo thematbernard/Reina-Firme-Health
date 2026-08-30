@@ -124,7 +124,8 @@ Then ask Claude: *"Where should we open our next facility?"*
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |
-| `evals` | agent-level evals through the MCP tools *(needs an Anthropic key)* |
+| `evals` | agent-level evals via the Anthropic SDK *(needs an Anthropic key)* |
+| `evals-cli` | same 11 cases via `claude -p` over real MCP stdio *(no API key)* |
 | `serve` / `serve-http` | run the MCP server on stdio / HTTP |
 | `demo` | attach a client to a visible `serve-http` server via `.mcp.http.json`, so tool calls and SQL stream live in a second pane |
 | `fingerprint` / `golden` | print the build fingerprint; regenerate the tool-description golden |
@@ -193,8 +194,25 @@ Nothing here asks to be taken on trust.
   questions supplied up front. `evals/cases.json` is skewed the same way (8 of 11
   cases orbit those two questions); `raw_navigation_prevalence` is the one case
   that deliberately probes the ungoverned `raw.*` path.
-- **The agent evals have never run** — no Anthropic credential was configured.
-  The harness is complete and `--dry-run` verifies it; no pass rate is claimed.
+- **Agent evals: 9/11**, run via `make evals-cli` (`claude -p` over the real
+  stdio MCP transport, `claude-opus-5`, single rep). Both `bad_premise` and both
+  `unanswerable` cases passed — the four that matter most. Two failures, and they
+  are not the same kind of thing:
+  - `raw_navigation_prevalence` is a **real** failure: structurally correct
+    (right join path, right coverage caveat) but the numbers were ~8% low from an
+    undisclosed active-enrollment filter, and it used a broadened `I1x` code set
+    (25.3%) instead of essential hypertension (16.3%). This is the off-mart
+    `raw.*` path, which is the weakest path by design.
+  - `staffing_denominator` is a **false positive in the grader**. The agent
+    answered correctly from `providers_based` and explicitly refused the C1 trap
+    — but said "…makes every clinic look like it has ~5,597 providers" while
+    doing so, and the deterministic `must_not` check is a plain substring match.
+    Left unfixed and reported as a failure rather than corrected-and-rerun; see
+    [roadmap item 5](docs/roadmap.md).
+
+  Single rep, so no variance figure. The SDK runner (`make evals`) still has
+  never executed — the 9/11 measures Claude Code + this MCP server, which is the
+  configuration the demo uses.
 - **Freshness is bounded by the last extract.** The nightly refresh is specified
   and the mechanics are in place (atomic swap, provenance table); the scheduler
   itself is not built.
@@ -238,5 +256,21 @@ agent evals; curated MCP tools; real drive time.
 
 ## Time spent
 
-Commits span 2026-08-28 19:17 → 2026-08-29 15:03. Work was not continuous, so
-the wall-clock span overstates effort — see `git log` for the actual shape of it.
+**Approximately 9–10 hours**, against a planned budget of 8–10 (`PLAN.md`).
+
+Work happened in three sessions rather than continuously, so the calendar span
+(2026-08-28 → 2026-08-30) overstates effort considerably. Derived from commit
+clustering:
+
+| Session | Span | Commits | Work |
+|---|---|---|---|
+| Fri 8/28 eve | 19:17–21:24 (~2.1h) | 3 | Connectivity, profiling, extract/load, first marts + MCP server |
+| Sat 8/29 | 12:12–17:01 (~4.8h) | 15 | Semantic layer, both analyses, evals, marts, measurement, stdio tests, portable artifact, README, guardrail hardening |
+| Sun 8/30 | ~1.5h | 1 | Deck, talk track, number-consistency pass |
+
+Add roughly an hour of setup before the first commit (credentials, reading the
+dataset spec, `PLAN.md`) that left no commit trail.
+
+The largest interior gap is 8/29 13:18→15:03, which was the portable-artifact
+step — real work, not a break. Session spans are therefore a fair proxy for
+effort here rather than an upper bound.

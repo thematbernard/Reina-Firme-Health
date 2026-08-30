@@ -14,18 +14,35 @@ exercise is the stdio transport itself — that is covered by launching
 Grading is two-stage: cheap deterministic string checks (must_not substrings),
 then an LLM judge given the independently-computed ground truth.
 
-Usage:
-  make evals                       # all cases, 1 run each
-  uv run python evals/run.py --case sacramento_40pct_gap --reps 3
-  uv run python evals/run.py --dry-run          # no API calls; print the setup
+Two runners, same cases and same grading:
 
-Requires a credential: ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or `ant auth login`.
+  --runner sdk  (default)  drives anthropic.Anthropic() directly, dispatching the
+                tool functions in-process. Needs ANTHROPIC_API_KEY /
+                ANTHROPIC_AUTH_TOKEN / `ant auth login`.
+  --runner cli  shells out to `claude -p` with --mcp-config, so the agent runs
+                inside Claude Code's harness and reaches the tools over the real
+                stdio MCP transport. Uses whatever credential the Claude Code CLI
+                already has; no API key needed.
+
+They do NOT measure the same thing, and results.json records which one ran. The
+sdk path isolates the model + tools with the SYSTEM prompt below. The cli path
+measures Claude Code + this MCP server — a different harness and system prompt,
+but the configuration the demo actually uses. Neither is "the" number; say which.
+
+Usage:
+  make evals                       # all cases, 1 run each (sdk)
+  make evals-cli                   # all cases via the Claude Code CLI
+  uv run python evals/run.py --case sacramento_40pct_gap --reps 3
+  uv run python evals/run.py --runner cli --case member_counts
+  uv run python evals/run.py --dry-run          # no API calls; print the setup
 """
 
 import argparse
 import inspect
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -132,6 +149,80 @@ def run_case(client, case: dict, verbose: bool = False) -> dict:
             "stop_reason": "max_turns"}
 
 
+# --- CLI runner -------------------------------------------------------------
+# Shells out to `claude -p`, which reaches the same four tools over the real
+# stdio MCP transport rather than through in-process dispatch. Uses the Claude
+# Code CLI's own credential, so this path runs with no ANTHROPIC_API_KEY.
+
+MCP_CONFIG = ROOT / ".mcp.json"
+CLI_TOOLS = ",".join(f"mcp__reina-firme-analytics__{n}" for n in TOOL_FNS)
+CLI_TIMEOUT_S = 300
+
+
+def _claude(prompt: str, with_tools: bool) -> dict:
+    """Run one `claude -p` turn and return the parsed --output-format json blob."""
+    if not shutil.which("claude"):
+        raise SystemExit("--runner cli needs the `claude` CLI on PATH")
+    cmd = ["claude", "-p", prompt, "--output-format", "json"]
+    if with_tools:
+        cmd += ["--mcp-config", str(MCP_CONFIG), "--strict-mcp-config",
+                "--allowedTools", CLI_TOOLS]
+    else:
+        # judge needs no tools; --strict-mcp-config with no config = no servers
+        cmd += ["--strict-mcp-config"]
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          cwd=str(ROOT), timeout=CLI_TIMEOUT_S)
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude exited {proc.returncode}: {proc.stderr[:400]}")
+    return json.loads(proc.stdout)
+
+
+def run_case_cli(case: dict, verbose: bool = False) -> dict:
+    """Same contract as run_case(), driven through the Claude Code CLI.
+
+    Tool calls are not itemised in --output-format json, so `calls` is left
+    empty and `turns` carries the CLI's num_turns as the closest proxy. Anything
+    reporting a tool-call count must use the sdk runner.
+    """
+    prompt = f"{SYSTEM}\n\nQUESTION: {case['question']}"
+    try:
+        blob = _claude(prompt, with_tools=True)
+    except subprocess.TimeoutExpired:
+        return {"answer": f"[cli timeout after {CLI_TIMEOUT_S}s]", "calls": [],
+                "stop_reason": "timeout", "turns": None}
+    except RuntimeError as e:
+        return {"answer": f"[cli error] {e}", "calls": [],
+                "stop_reason": "error", "turns": None}
+    answer = blob.get("result", "")
+    if verbose:
+        print(f"    -> {blob.get('num_turns')} turns, "
+              f"{blob.get('duration_ms')}ms")
+    return {"answer": answer, "calls": [],
+            "stop_reason": blob.get("stop_reason", "end_turn"),
+            "turns": blob.get("num_turns"),
+            "cli_model": ",".join(blob.get("modelUsage", {}) or {}) or None}
+
+
+def judge_cli(case: dict, answer: str) -> dict:
+    """Grade via the CLI, using the same JUDGE_PROMPT as the sdk path."""
+    prompt = JUDGE_PROMPT.format(
+        question=case["question"], kind=case["kind"], expected=case["expected"],
+        must_include=case["must_include"] or "(none specified)", answer=answer,
+    )
+    try:
+        blob = _claude(prompt, with_tools=False)
+    except (subprocess.TimeoutExpired, RuntimeError) as e:
+        return {"verdict": "FAIL", "reason": f"judge failed: {e}"}
+    text = blob.get("result", "")
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return {"verdict": "FAIL", "reason": f"judge returned no JSON: {text[:200]}"}
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError as e:
+        return {"verdict": "FAIL", "reason": f"unparseable judge JSON: {e}"}
+
+
 JUDGE_PROMPT = """You are grading an analytics agent's answer against independently verified ground truth.
 
 QUESTION: {question}
@@ -202,6 +293,10 @@ def main():
     ap.add_argument("--reps", type=int, default=1, help="runs per case (variance check)")
     ap.add_argument("--verbose", action="store_true", help="print each tool call")
     ap.add_argument("--dry-run", action="store_true", help="no API calls")
+    ap.add_argument("--runner", choices=["sdk", "cli"], default="sdk",
+                    help="sdk: anthropic SDK + in-process tools (needs a key). "
+                         "cli: `claude -p` over the real stdio MCP transport "
+                         "(uses the Claude Code CLI's credential)")
     ap.add_argument("--out", default=str(Path(__file__).parent / "results.json"))
     args = ap.parse_args()
 
@@ -210,7 +305,8 @@ def main():
         raise SystemExit(f"no cases matched {args.case}")
 
     if args.dry_run:
-        print(f"{len(cases)} case(s), {args.reps} rep(s), model {MODEL}")
+        print(f"{len(cases)} case(s), {args.reps} rep(s), "
+              f"runner {args.runner}, model {MODEL}")
         print(f"\n{len(tool_schemas())} tools derived from mcp_server/server.py:")
         for t in tool_schemas():
             print(f"  {t['name']}({', '.join(t['input_schema']['properties'])})"
@@ -220,8 +316,13 @@ def main():
             print(f"  [{c['kind']:<12}] {c['id']}: {c['question'][:70]}")
         return
 
-    import anthropic
-    client = anthropic.Anthropic()
+    if args.runner == "sdk":
+        import anthropic
+        client = anthropic.Anthropic()
+    else:
+        client = None
+        print(f"runner: cli (`claude -p` via {MCP_CONFIG.name}, "
+              f"no ANTHROPIC_API_KEY required)")
 
     results, passed = [], 0
     for c in cases:
@@ -229,24 +330,39 @@ def main():
             label = f"{c['id']}" + (f" (rep {rep + 1})" if args.reps > 1 else "")
             print(f"\n[{c['kind']}] {label}")
             print(f"  Q: {c['question']}")
-            run = run_case(client, c, verbose=args.verbose)
+            if args.runner == "cli":
+                run = run_case_cli(c, verbose=args.verbose)
+            else:
+                run = run_case(client, c, verbose=args.verbose)
 
             fail = deterministic_check(c, run["answer"])
             if fail:
                 grade = {"verdict": "FAIL", "reason": fail, "hallucinated": True}
+            elif args.runner == "cli":
+                grade = judge_cli(c, run["answer"])
             else:
                 grade = judge(client, c, run["answer"])
 
             ok = grade.get("verdict") == "PASS"
             passed += ok
-            print(f"  {len(run['calls'])} tool calls | "
+            # cli cannot itemise tool calls; report its turn count instead
+            effort = (f"{len(run['calls'])} tool calls" if args.runner == "sdk"
+                      else f"{run.get('turns', '?')} turns")
+            print(f"  {effort} | "
                   f"{'PASS' if ok else 'FAIL'} — {grade.get('reason', '')}")
             results.append({"case": c["id"], "kind": c["kind"], "rep": rep,
                             "question": c["question"], **run, "grade": grade})
 
     total = len(results)
     Path(args.out).write_text(json.dumps(
-        {"model": MODEL, "passed": passed, "total": total, "results": results},
+        {"runner": args.runner,
+         "model": MODEL if args.runner == "sdk" else "claude-code-cli",
+         "harness_note": (
+             "sdk: anthropic SDK loop with this file's SYSTEM prompt, tools "
+             "dispatched in-process. cli: `claude -p` inside Claude Code's "
+             "harness, tools reached over the real stdio MCP transport. "
+             "Different system prompts; not directly comparable."),
+         "passed": passed, "total": total, "results": results},
         indent=2, default=str))
     print(f"\n{'=' * 60}\n{passed}/{total} passed\nwrote {args.out}")
 

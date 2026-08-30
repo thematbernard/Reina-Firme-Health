@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs portable build test evals identity-quality benchmark analysis fingerprint golden server-info serve serve-http demo all
+.PHONY: check profile extract load marts docs portable build test evals evals-cli identity-quality benchmark analysis fingerprint golden server-info serve serve-http demo all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
@@ -21,8 +21,11 @@ docs:         ## regenerate semantic/schema.md from the warehouse
 test:         ## warehouse integrity + MCP guardrails (no LLM, fast)
 	uv run pytest tests/ -q
 
-evals:        ## agent-level evals through the MCP tools (needs an Anthropic credential)
+evals:        ## agent-level evals via the Anthropic SDK (needs an Anthropic credential)
 	uv run python evals/run.py
+
+evals-cli:    ## same cases via `claude -p` over real MCP stdio (no API key needed)
+	uv run python evals/run.py --runner cli
 
 identity-quality: ## measure crosswalk precision + recall (no API needed)
 	uv run python evals/identity_quality.py

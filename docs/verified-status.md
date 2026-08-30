@@ -189,12 +189,75 @@ The server now reports a build fingerprint (sha256 over `server.py` +
 Compare it to `make fingerprint`; a mismatch means restart the client. Verified
 to change when the semantic layer changes, not just when code does.
 
+## 5. Agent evals — measured, 9/11
+
+Run with `make evals-cli`: the 11 cases in `evals/cases.json` driven through
+`claude -p` with `--mcp-config .mcp.json --strict-mcp-config`, so the agent
+reaches the four tools over the **real stdio MCP transport**. Model
+`claude-opus-5`, single rep, no `ANTHROPIC_API_KEY` — it uses the Claude Code
+CLI's own credential. `evals/results.json` records the runner and a harness note.
+
+| kind | passed | what it measures |
+|---|---|---|
+| `factual` | 2/2 | can it find a number at all |
+| `analytical` | 3/5 | multi-step reasoning, denominators, time windows |
+| `bad_premise` | **2/2** | does it refuse to invent a cause |
+| `unanswerable` | **2/2** | does it admit missing data instead of substituting a proxy |
+
+**The four cases that matter most all passed.** On `sacramento_40pct_gap` the
+judge recorded: *"explicitly rejects the false premise with the right evidence
+(size-matched clinics differ ~0.4%, max/min 1.029, CV 0.68% across 64 owned
+clinics)… and invents no causal story for the nonexistent gap."*
+
+### The two failures are different in kind
+
+**`raw_navigation_prevalence` — a real failure.** Method sound, numbers wrong:
+4,401 hypertension members and 27,153 linked against a verified 4,820 and 29,598
+(~8% low, from an active-enrollment filter it did not disclose), and a headline
+25.3% computed over a broadened `I1x` code set rather than 16.3% for essential
+hypertension. The structural reasoning was right — clinical data only in
+`raw.ehr_conditions`, joined via `marts.identity_xwalk`, with the partial-EHR
+coverage caveat stated. This is the off-mart `raw.*` path, which the mart
+guarantee explicitly does not cover, and this case exists to probe it.
+
+**`staffing_denominator` — a false positive in the grader.** The agent answered
+correctly: provider counts from `marts.facility_metrics.providers_based`,
+cross-checked against `raw.ops_providers`, `ownership='owned'` and
+`facility_type='clinic'` applied. It then wrote:
+
+> I did **not** use `ops_appointments.provider_id`; per caveat C1 it is randomly
+> assigned and makes every clinic look like it has ~5,597 providers.
+
+`must_not` is a plain substring match, so naming the trap it avoided scored
+identically to falling into it.
+
+**Reported as a failure, deliberately.** `evals/README.md` commits to reporting
+failures rather than tuning cases until they pass, and quoting an improved
+number after adjusting a check that the suite had just caught misfiring would
+violate the spirit of that. The honest statement is: **9/11 measured, of which
+one failure is a known grader artifact with the transcript as evidence.**
+Negation-aware matching is a roadmap item, not a patch to apply on the way to a
+better score.
+
+### What this does and does not establish
+
+It measures **Claude Code plus this MCP server** — the configuration the demo
+runs — not the model in isolation. `--runner sdk` drives a bare Anthropic loop
+with `run.py`'s own `SYSTEM` prompt and in-process tool dispatch; it remains
+unexecuted, and the two are not comparable. Single rep, so no variance figure.
+
+One thing the cli runner closes that nothing else did: it is the only automated
+check exercising the agent, the tools, **and** the stdio transport together.
+`tests/test_stdio.py` covers the transport without an agent; `--runner sdk`
+would cover the agent without the transport.
+
 ## Still unmeasured
 
 | gap | why it matters | how to close |
 |---|---|---|
 | **Nightly refresh scheduler** | decision and mechanics settled (ADR 0002); only the cron/Airflow wiring is outstanding | see [roadmap item 1](roadmap.md) |
-| **Agent eval pass rate** | `evals/run.py` has never executed — no credential configured | export a key, `make evals --reps 3` |
-| **Agent tool-call count against marts** | the real "time to answer"; cold agent needed 29 calls against `raw.*` | rerun the cold probe now that marts exist |
+| **Agent tool-call count against marts** | the real "time to answer"; cold agent needed 29 calls against `raw.*`. The cli runner reports turns, not itemised tool calls | rerun the cold probe, or use `--runner sdk` |
+| **Eval variance** | 9/11 is a single rep; one run cannot separate a real failure from sampling | `make evals-cli` equivalent at `--reps 3` |
+| **SDK-runner pass rate** | 9/11 came from the cli runner; the sdk path is a different harness and is still unexecuted | export a key, `make evals` |
 | **`marts.member_360`** | the crosswalk is still only a join hop; unified identity has no consumer | build it |
 | **Fuzzy-tier precision by hand** | 85.2% is an estimator, not a graded sample | hand-label ~50 fuzzy links |

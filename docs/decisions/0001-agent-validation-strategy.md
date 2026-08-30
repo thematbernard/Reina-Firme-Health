@@ -103,6 +103,10 @@ deliverable. Validation is bounded here on purpose.
 - **A has never been executed.** It is verified only to the API boundary
   (`--dry-run`, offline tool dispatch, 7 structural tests). Claiming a pass
   rate from it would be fabrication.
+  *(Amended 2026-08-30: still true of A as written — the Anthropic-SDK path. A
+  second runner, `--runner cli`, now drives the same cases through `claude -p`
+  over real MCP stdio and has executed at 9/11. That is a different harness, and
+  it also supersedes the last bullet below: it covers the transport.)*
 - **Neither A nor C covers the transport.** If MCP stdio serialization is
   broken, both still pass and the demo still fails. B is the only cover, and it
   is currently outstanding.

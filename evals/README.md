@@ -5,20 +5,40 @@ This proves the **agent reaches the right conclusion through the tools** — whi
 is what the live demo depends on, and what `tests/` cannot tell us.
 
 ```bash
-make evals                                          # all 11 cases
+make evals                                          # all 11 cases, Anthropic SDK
+make evals-cli                                      # all 11 cases, Claude Code CLI
 uv run python evals/run.py --dry-run                # no API calls, prints setup
+uv run python evals/run.py --runner cli --case member_counts
 uv run python evals/run.py --case sacramento_40pct_gap --reps 3 --verbose
 ```
 
-Needs an Anthropic credential (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or
-`ant auth login`). `--dry-run` and `make test` need none.
+## Two runners
 
-## Why these ten cases
+Same cases, same grading, different harness. `results.json` records which ran.
+
+| | `--runner sdk` (default) | `--runner cli` |
+|---|---|---|
+| driver | `anthropic.Anthropic()` loop | `claude -p --output-format json` |
+| tools reached via | in-process dispatch | **real stdio MCP transport** |
+| system prompt | `SYSTEM` in `run.py` | Claude Code's, plus `SYSTEM` prepended |
+| credential | `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` / `ant auth login` | whatever the `claude` CLI already has |
+| tool-call counts | itemised | not itemised — `num_turns` only |
+
+**They are not interchangeable, and neither is "the" number.** The sdk path
+isolates model + tools under a known system prompt, which is the cleaner
+experiment. The cli path measures Claude Code talking to this MCP server over
+the transport a client actually uses — a noisier experiment, but the exact
+configuration the demo runs. Always state which produced a quoted pass rate.
+
+The cli path also closes the transport gap noted under *Fidelity* below: it is
+the only automated check that exercises the agent, the tools, and stdio together.
+
+## Why these eleven cases
 
 | kind | n | what it measures |
 |---|---|---|
 | `factual` | 2 | can it find a number at all |
-| `analytical` | 4 | multi-step reasoning, correct denominators and time windows |
+| `analytical` | 5 | multi-step reasoning, correct denominators and time windows |
 | `bad_premise` | 2 | **does it refuse to invent a cause** |
 | `unanswerable` | 2 | does it admit missing data instead of substituting a proxy |
 
@@ -56,14 +76,15 @@ Tool definitions are derived by introspection from the functions in
 semantic layer. The eval therefore cannot drift from the server, and
 `tests/test_evals.py` asserts that.
 
-**What this does not cover:** the stdio transport. These evals call the tool
+**What `--runner sdk` does not cover:** the stdio transport. It calls the tool
 functions directly, so a bug in MCP serialization or server startup would not
-show up here. Verify that separately by running `make serve` from a real client
-(Claude Desktop / Claude Code) — which is also the demo path.
+show up. Covered two other ways: `tests/test_stdio.py` exercises the transport
+without an agent, and `--runner cli` exercises agent and transport together.
 
 ## Reporting results
 
-Write down the pass rate, per-kind breakdown, and variance across `--reps 3`.
-Report failures rather than tuning cases until they pass — a suite at 10/10
-first try mostly proves the cases were written to the answers. Results land in
-`evals/results.json`.
+Write down the pass rate, per-kind breakdown, the **runner**, and variance
+across `--reps 3`. Report failures rather than tuning cases until they pass — a
+suite at 11/11 first try mostly proves the cases were written to the answers.
+Results land in `evals/results.json`, which records `runner`, `model` and a
+`harness_note` so a reader knows what the number means.
