@@ -267,8 +267,8 @@ Rattle these off. Speed here reads as confidence, not evasion.
 ## Slide 8 — What's next (0:30)
 
 Six items, highest value first: nightly refresh scheduler; the DOB-variant
-identity fix; `marts.member_360`; run the evals; curated MCP tools; real drive
-time.
+identity fix; `marts.member_360`; close out the evals (`--reps 3` for variance,
+negation-aware grading); curated MCP tools; real drive time.
 
 Hand off:
 

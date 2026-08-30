@@ -249,10 +249,22 @@ whatever produced it.
 
 ## What's next
 
-See **[docs/roadmap.md](docs/roadmap.md)**. Highest value first: the nightly
-refresh scheduler; the DOB-variant identity fix (the only recall failure mode
-that produces *wrong* rather than missing links); `marts.member_360`; running the
-agent evals; curated MCP tools; real drive time.
+See **[docs/roadmap.md](docs/roadmap.md)**. Highest value first:
+
+1. **Nightly refresh scheduler** — decided and specified ([ADR 0002](docs/decisions/0002-materialization-and-freshness.md)); only the wiring is outstanding.
+2. **DOB-variant identity fix** — the only recall failure mode that produces
+   *wrong* rather than missing links (3.6% recall, 21% of the matches it does
+   make are false).
+3. **`marts.member_360`** — the crosswalk has no consumer today; this is it, and
+   it would also govern the `raw.*` path that the one substantive eval failure
+   walked down.
+4. **Close out the evals** — `--reps 3` for a variance figure, the `sdk` runner
+   for itemised tool-call counts, and negation-aware `must_not` matching so a
+   correct answer can name the trap it avoided without failing.
+5. **Curated MCP tools** — `compare_facilities(a, b)`, `market_summary(city)`,
+   leaving raw SQL as the escape hatch.
+6. **Real drive time** — 252 isochrone polygons sit unused; this almost certainly
+   *strengthens* the Sacramento case.
 
 ## Time spent
 
