@@ -53,6 +53,14 @@ attributed panels are closest (within 0.1%).
 Every operational metric matches. No-show and cancellation behaviour is
 identical, so the gap is not hiding in demand realization either.
 
+**Denominator note.** `per panel member` here is `completed / panel_total` —
+every member whose PCP is based at the facility. The mart column
+`marts.facility_metrics.appts_per_panel_member` divides by `panel_active`
+instead, giving 1.775 (Sacramento) vs 1.794 (Atlanta). Both definitions keep the
+matched pair within ~1%, and the network-level **+27.9%** in §3 is identical
+under either: 1.951/1.525 on `panel_total`, 2.129/1.665 on `panel_active`. An
+agent answering from the mart will report the `panel_active` figures.
+
 ## 3. Any "gap" you find is a denominator artifact — and it points the other way
 
 Because the numerator is effectively constant (CV 0.68%), any utilization
@@ -83,7 +91,7 @@ normalized measure.
 
 A structural network gap, visible in facility composition:
 
-| Market | Members | Clinics | Hospitals | Urgent care |
+| Market | Members (total) | Clinics | Hospitals | Urgent care |
 |---|---|---|---|---|
 | Sacramento | 55,183 | 4 | **0** | **0** |
 | Atlanta | 133,598 | 8 | 1 | 2 |
@@ -131,7 +139,7 @@ more — it spends it somewhere else, at facilities Reina Firme does not own.
    They are performing at or above the Atlanta clinics on every measure we can
    construct.
 3. The real Sacramento question is **acute-care access**, and it feeds the
-   "where do we open next" question directly: 55,183 members, zero owned
+   "where do we open next" question directly: 55,183 members (50,618 active), zero owned
    hospital or urgent care, and **$228M/year of allowed spend leaving the
    market** — $219M/year of it hospital care. That is the business case to
    evaluate, and it is a far larger number than any utilization fix could

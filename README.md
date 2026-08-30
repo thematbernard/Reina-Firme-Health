@@ -7,7 +7,7 @@ weeks.
 **Both questions are answered, and one of them turned out to be wrong.**
 
 - **Where should we open next?** Sacramento — as an acute-care hospital, not
-  another clinic. 55,183 members, **zero owned hospitals and zero owned urgent
+  another clinic. 55,183 members (50,618 active), **zero owned hospitals and zero owned urgent
   cares**, and members travel a **median 75.5 miles** for acute care (95.7% over
   30 miles), the worst access in the network by a wide margin.
   → [analysis/01_next_facility.md](analysis/01_next_facility.md)
@@ -120,7 +120,7 @@ Then ask Claude: *"Where should we open our next facility?"*
 | `extract` / `marts` / `docs` | pull to parquet; build marts; regenerate `schema.md` |
 | `portable` | export the 7 MB PII-free marts-only warehouse |
 | `build` | `extract` + `marts` + `docs` + `portable` |
-| `test` | 145 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
+| `test` | 146 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |

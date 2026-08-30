@@ -11,7 +11,7 @@ never estimated.
 | no consistent shape | 3 marts + semantic layer | **Measured** — Q1/Q2 each 1 query, 195–268x faster than hand-assembly |
 | no fast query path | DuckDB + MCP | **Measured** — 293x vs Redshift; but see the caveat, latency was not the bottleneck |
 
-Reproduce: `make identity-quality`, `make benchmark`, `make test` (104 tests, ~4s).
+Reproduce: `make identity-quality`, `make benchmark`, `make test` (146 tests, ~16s).
 
 ---
 

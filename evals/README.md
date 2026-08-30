@@ -5,7 +5,7 @@ This proves the **agent reaches the right conclusion through the tools** — whi
 is what the live demo depends on, and what `tests/` cannot tell us.
 
 ```bash
-make evals                                          # all 10 cases
+make evals                                          # all 11 cases
 uv run python evals/run.py --dry-run                # no API calls, prints setup
 uv run python evals/run.py --case sacramento_40pct_gap --reps 3 --verbose
 ```

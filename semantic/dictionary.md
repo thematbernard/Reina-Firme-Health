@@ -145,7 +145,7 @@ throughput does not. See `analysis/02_sacramento_vs_atlanta.md`.
 
 **C2b. Sacramento vs Atlanta specifically.** Size-matched clinics differ by
 0.4%, and Sacramento sits at or above Atlanta on every normalized measure. The
-real Sacramento finding is network composition: 55,183 members, zero owned
+real Sacramento finding is network composition: 55,183 members (50,618 active), zero owned
 hospital and zero owned urgent care, 92.8% of hospital claims leaving the
 market, $228M/yr of allowed spend going out of market vs Atlanta's 31%.
 

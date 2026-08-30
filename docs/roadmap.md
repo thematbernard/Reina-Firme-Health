@@ -88,7 +88,7 @@ the server when `server.py` or the semantic layer changes would close it.
 
 ## 5. Run the agent evals — harness ready, never executed
 
-`evals/run.py` (10 cases: 2 factual, 4 analytical, 2 bad-premise, 2
+`evals/run.py` (11 cases: 2 factual, 5 analytical, 2 bad-premise, 2
 unanswerable) has never run — no Anthropic credential is configured here.
 Export a key and `make evals`, then `--reps 3` for variance. Report the failures
 rather than tuning cases until they pass.
