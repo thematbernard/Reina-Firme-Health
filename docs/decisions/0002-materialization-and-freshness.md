@@ -68,7 +68,7 @@ faster.
    partition. Adjudicated amounts also get restated, so append-only would
    accumulate stale dollars.
 3. **Rebuild marts in full every night.** The whole mart layer builds in
-   **1.06s**, so incrementalizing it would add complexity for no gain.
+   **1.36s**, so incrementalizing it would add complexity for no gain.
 4. **Swap atomically.** DuckDB permits a single writer, so an in-place rebuild
    would either fail against a live MCP server or expose a half-built
    warehouse. `04_build_marts.py` builds to `warehouse.duckdb.tmp` and

@@ -8,10 +8,10 @@ never estimated.
 | Brief says | Built | Status |
 |---|---|---|
 | no unified identity | `marts.identity_xwalk` | **Measured** — ~99.9% precision, recall 3.6–100% by corruption type |
-| no consistent shape | 3 marts + semantic layer | **Measured** — Q1/Q2 each 1 query, 195–268x faster than hand-assembly |
+| no consistent shape | 4 marts + semantic layer | **Measured** — Q1/Q2 each 1 query, 195–268x faster than hand-assembly |
 | no fast query path | DuckDB + MCP | **Measured** — 293x vs Redshift; but see the caveat, latency was not the bottleneck |
 
-Reproduce: `make identity-quality`, `make benchmark`, `make test` (146 tests, ~16s).
+Reproduce: `make identity-quality`, `make benchmark`, `make test` (152 tests, ~16s).
 
 ---
 
@@ -83,7 +83,14 @@ existed. Answering one question took **11 JOINs across 110 lines**, and the cold
 agent needed **29 tool calls** for two questions.
 
 After: `marts.facility_metrics` (284 rows), `marts.market_summary` (42),
-`marts.identity_xwalk` (592K). Q1 and Q2 are each **one query, no joins**.
+`marts.market_flows` (12,443), `marts.identity_xwalk` (592K). Q1 and Q2 are each
+**one query, no joins** — including the *second half* of Q1. `market_summary`
+answers "which market"; it collapses every hospital line into one `acute_*`
+group, so "what services should it offer" previously needed a three-table raw
+join. `market_flows` carries spend at member_city × care_city × service_line ×
+network_status, which is also the only grain at which a multi-city catchment is
+expressible: a Sacramento member treated in Stockton is out-of-market at city
+grain and in-corridor at corridor grain.
 
 Five documented caveats became structurally impossible rather than remembered:
 
@@ -95,7 +102,7 @@ Five documented caveats became structurally impossible rather than remembered:
 | OR denominator — use operating days, not 365 | `or_utilization_pct` computed once |
 | R6 — savings live in `plan_paid` | both `allowed_amount` and `plan_paid` carried |
 
-Full warehouse rebuild: **1.06s**.
+Full warehouse rebuild: **1.36s**.
 
 ## 3. Fast query path — measured, with an honest caveat
 
@@ -123,7 +130,7 @@ confidently wrong answers. What actually collapsed from weeks to minutes is the
 
 Two honest disclosures:
 
-- The marts precompute, so their query time excludes a **1.06s build**. Against
+- The marts precompute, so their query time excludes a **1.36s build**. Against
   the DuckDB raw path the build pays for itself after roughly a dozen questions;
   against Redshift, after three.
 - The DuckDB numbers come from a local parquet snapshot (1.6GB). **This is a
@@ -240,6 +247,11 @@ Negation-aware matching is a roadmap item, not a patch to apply on the way to a
 better score.
 
 ### What this does and does not establish
+
+One disclosure on the build: 9/11 was measured before `marts.market_flows` was
+added. Nothing in the suite depends on that mart, and no case was re-run to
+produce a better number, but the honest statement is that the pass rate belongs
+to the preceding build.
 
 It measures **Claude Code plus this MCP server** — the configuration the demo
 runs — not the model in isolation. `--runner sdk` drives a bare Anthropic loop

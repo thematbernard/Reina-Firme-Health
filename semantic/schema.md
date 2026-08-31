@@ -365,7 +365,7 @@ Local naming: Redshift's `payer.claims` is `raw.payer_claims`
 
 | column | type | notes |
 |---|---|---|
-| `built_at` | TIMESTAMP WITH TIME ZONE | range 2026-08-29 → 2026-08-29 |
+| `built_at` | TIMESTAMP WITH TIME ZONE | range 2026-08-31 → 2026-08-31 |
 | `source_table` | VARCHAR |  |
 | `row_count` | BIGINT |  |
 | `event_column` | VARCHAR |  |
@@ -425,6 +425,23 @@ Local naming: Redshift's `payer.claims` is `raw.payer_claims`
 | `member_id` | VARCHAR |  |
 | `match_method` | VARCHAR |  |
 | `match_confidence` | DOUBLE |  |
+
+### marts.market_flows — 12,443 rows (12K)
+
+| column | type | notes |
+|---|---|---|
+| `member_city` | VARCHAR |  |
+| `member_state` | VARCHAR |  |
+| `care_city` | VARCHAR |  |
+| `service_line` | VARCHAR |  |
+| `is_acute` | BOOLEAN |  |
+| `network_status` | VARCHAR |  |
+| `ownership` | VARCHAR |  |
+| `in_market` | BOOLEAN |  |
+| `claims` | BIGINT |  |
+| `allowed_musd` | DOUBLE |  |
+| `plan_paid_musd` | DOUBLE |  |
+| `if_owned_plan_paid_musd` | DOUBLE |  |
 
 ### marts.market_summary — 42 rows (42)
 

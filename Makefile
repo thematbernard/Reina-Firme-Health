@@ -55,7 +55,7 @@ demo:         ## pane 2: attach a client to the visible `make serve-http` server
 	@nc -z 127.0.0.1 8000 2>/dev/null || { echo "nothing on 127.0.0.1:8000 — run 'make serve-http' in another pane first"; exit 1; }
 	claude --mcp-config .mcp.http.json --strict-mcp-config
 
-portable:     ## export a 7MB PII-free marts-only warehouse (runs without Redshift)
+portable:     ## export a 7.4MB PII-free marts-only warehouse (runs without Redshift)
 	uv run pipeline/06_export_portable.py
 
 build: extract marts docs portable   ## full rebuild from Redshift

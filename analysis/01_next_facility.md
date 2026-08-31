@@ -7,8 +7,11 @@ zero owned urgent cares**, and its members travel further for acute care than
 anyone else by a wide margin. The ambulatory need is already met by the four
 owned clinics there; the gap is hospital-based care.
 
-Every number below is one query against `marts.market_summary` or
-`marts.facility_metrics`. Reproduce with `make analysis`.
+Every number below is one query against `marts.market_summary`,
+`marts.market_flows` or `marts.facility_metrics`. Reproduce with `make analysis`,
+which runs
+[`01_next_facility.sql`](01_next_facility.sql) — its blocks are in the section
+order used here.
 
 ## 1. Sacramento is the access outlier
 
@@ -38,6 +41,15 @@ That single column is the decision. It is also why market ranking must use
 geographic measures rather than ownership share: **owned dollar share is
 61–63% in every city** and carries no cross-market signal at all (caveat C6).
 
+**Leakage share does not separate them either, and points the wrong way.**
+Oakland sends **94.3%** of its allowed dollars out of market against
+Sacramento's 82.8% — because out-of-market and out-of-network are different
+things. Most of both cities' out-of-market spend lands at *owned* facilities
+(Oakland 59.2%, Sacramento 48.8% of all allowed). Oakland's leaves the city and
+travels 12.6 miles; Sacramento's leaves and travels 75.5. Distance is the
+measure that separates the two markets, which is why the recommendation rests
+on it.
+
 ## 3. Sacramento anchors a three-city corridor
 
 Stockton (48.9 median miles) and Modesto (53.2) have the same problem and no
@@ -50,18 +62,26 @@ owned hospital either. Together:
 
 ## 4. What services — only the hospital lines are leaking
 
-Corridor members, trailing 12 months. The split is unusually clean:
+Corridor members, trailing 12 months, from `marts.market_flows` — **one table,
+no joins**. "Served in corridor" means the facility that handled the claim sits
+in Sacramento, Stockton or Modesto, whoever owns it; this is an access measure,
+not a market-share measure. The split is unusually clean:
 
 | Service line | Allowed | % served in corridor |
 |---|---|---|
-| **surgery** | **$221.5M** | **11.8%** |
-| **cardiology** | **$113.5M** | **11.6%** |
-| **er** | **$58.1M** | **11.8%** |
-| oncology | $0.9M | 10.9% |
+| **surgery** | **$221.5M** | **11.7%** |
+| **cardiology** | **$113.5M** | **11.7%** |
+| **er** | **$58.1M** | **11.9%** |
+| oncology | $0.9M | 11.4% |
 | imaging | $60.0M | 73.1% |
 | primary_care | $38.3M | 71.8% |
 | labs | $4.2M | 72.8% |
 | behavioral | $2.6M | 73.1% |
+
+Ranked by *recoverable plan-paid* rather than gross spend (rule R6), the order
+is the same and the case is sharper: **surgery $18.7M/yr, cardiology $9.6M,
+ER $4.8M** — against imaging $5.0M and primary care $3.2M, which would be
+recaptured by clinics that already exist.
 
 **Build for surgery, cardiology and an ED. Do not build more ambulatory
 capacity** — imaging, primary care, labs and behavioral are already ~72%

@@ -28,7 +28,7 @@ adjective — full detail and method in
 | Brief says | Built | Measured |
 |---|---|---|
 | no unified identity | `marts.identity_xwalk` | **99.89% precision** overall (85.2% on the fuzzy tier, 3 independent estimators within 0.2pp); recall 3.6–100% by corruption type |
-| no consistent shape | 3 marts + a generated semantic layer | Q1 and Q2 are each **one query, no joins** — down from 11 JOINs / 110 lines; **195x** faster than hand-assembly |
+| no consistent shape | 4 marts + a generated semantic layer | Q1 (both halves) and Q2 are each **one query, no joins** — down from 11 JOINs / 110 lines; **195x** faster than hand-assembly |
 | no fast query path | DuckDB + MCP server | **2ms** vs 298ms raw vs 0.4s at source |
 
 The honest caveat, stated up front: **Redshift at 0.1–0.2s was never the
@@ -52,13 +52,14 @@ Redshift (read-only)
       │  make extract          23 of 24 base tables → parquet, 1.6 GB
       ▼
 data/raw/*.parquet
-      │  make marts            views + materialized marts, atomic swap, 1.06s
+      │  make marts            views + materialized marts, atomic swap, 1.36s
       ▼
 data/warehouse.duckdb ──────────────────► data/portable/reina_marts.duckdb
-   raw.*     23 views (full history)         marts only, 7.1 MB, PII-free
+   raw.*     23 views (full history)         marts only, 7.4 MB, PII-free
    marts.*   identity_xwalk    592K          (runs with no source access)
              facility_metrics  284
              market_summary     42
+             market_flows      12K
              _build_metadata     7  ← freshness provenance
       │
       │  make docs             semantic/schema.md GENERATED from the warehouse
@@ -81,7 +82,7 @@ be *encoded* rather than merely documented. See
 
 ## Quickstart
 
-**Without source credentials** (7 MB artifact, both questions answerable):
+**Without source credentials** (7.4 MB artifact, both questions answerable):
 
 ```bash
 uv sync
@@ -118,9 +119,9 @@ Then ask Claude: *"Where should we open our next facility?"*
 |---|---|
 | `check` / `profile` | Redshift connectivity; schema + date-range profile |
 | `extract` / `marts` / `docs` | pull to parquet; build marts; regenerate `schema.md` |
-| `portable` | export the 7 MB PII-free marts-only warehouse |
+| `portable` | export the 7.4 MB PII-free marts-only warehouse |
 | `build` | `extract` + `marts` + `docs` + `portable` |
-| `test` | 146 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
+| `test` | 152 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |
@@ -224,7 +225,7 @@ pipeline/     00 connect · 01 profile · 02 extract · 03 load · 04 marts
               05 gen schema doc · 06 export portable · sql/ mart definitions
 semantic/     dictionary.md (hand) · schema.md (generated) · joins.json
 mcp_server/   server.py — the 4 MCP tools
-marts         identity_xwalk · facility_metrics · market_summary · _build_metadata
+marts         identity_xwalk · facility_metrics · market_summary · market_flows · _build_metadata
 analysis/     both strategy questions + reproducible SQL
 evals/        agent eval harness · identity quality · query benchmark
 tests/        130 tests across 6 files

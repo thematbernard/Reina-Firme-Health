@@ -15,7 +15,7 @@ starts on current data.
 What exists today:
 
 - `make build` (extract → marts → docs) runs the whole refresh by hand
-- mart rebuild is **1.06s**, so no incrementalization is needed there
+- mart rebuild is **1.36s**, so no incrementalization is needed there
 - the swap is already atomic (build to `.tmp`, `Path.replace()`), so a refresh
   cannot corrupt a live reader
 - `marts._build_metadata` records `built_at`, per-source row counts,

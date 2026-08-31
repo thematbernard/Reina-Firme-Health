@@ -12,11 +12,11 @@ the agent emitted broken SQL because it believed them.)
 
 Reina Firme is an integrated payer + provider: 1.1M members, care delivered at
 84 owned facilities (8 hospitals, 64 clinics, 12 urgent cares) across Northern
-California, Greater Atlanta and Central Texas, plus ~200 partner facilities.
+California, Greater Atlanta and Central Texas, plus 200 partner facilities.
 
 ## Start here: use the marts
 
-Three modelled tables answer most strategy questions in **one query with no
+Four modelled tables answer most strategy questions in **one query with no
 joins**. Prefer them over `raw.*` — they exist because the rules and caveats
 below were being applied by hand, inconsistently.
 
@@ -24,7 +24,18 @@ below were being applied by hand, inconsistently.
 |---|---|---|
 | `marts.facility_metrics` | one row per facility (284) | facility comparison, utilization, staffing, capacity |
 | `marts.market_summary` | one row per market/city (42) | market ranking, access gaps, growth and recapture |
+| `marts.market_flows` | member_city × care_city × service_line × network_status (12.4K) | **which services** leak and to where; spend and recapture by line; multi-city catchments |
 | `marts.identity_xwalk` | patient_id ↔ member_id (592K) | joining EHR to payer data |
+
+`market_summary` says *which market* has a gap; `market_flows` says *what to
+build there*. Use flows whenever the question names a service line, or spans
+more than one city — retention for a multi-city catchment is not derivable from
+per-city percentages, because a member treated in the next city over is
+out-of-market at city grain and in-catchment at corridor grain. Its dollar
+columns (`allowed_musd`, `plan_paid_musd`, `if_owned_plan_paid_musd`) are all
+additive, so any subtotal is a `SUM`. It deliberately carries **no distance
+column** — a median is not additive; distance lives in
+`market_summary.median_miles_to_acute`.
 
 **What the marts make impossible rather than merely documented:**
 
@@ -38,6 +49,9 @@ below were being applied by hand, inconsistently.
   error cannot recur.
 - `allowed_amount` and `plan_paid` are both carried, so R6's
   invisible-savings trap cannot occur.
+- Service-line spend is modelled at market grain in `market_flows`, so the
+  "what should we build" half of a siting question no longer needs a three-table
+  raw join (`payer_claims` × `payer_members` × `ops_facilities`).
 
 The rules below still apply when you drop to `raw.*` — for the full 3-year
 claims history, row-level detail, or anything the marts do not carry.

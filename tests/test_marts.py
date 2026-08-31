@@ -48,6 +48,21 @@ def test_market_summary_grain(con):
     assert n == distinct == 42
 
 
+def test_market_flows_grain(con):
+    """One row per member_city x care_city x service_line x network_status,
+    no duplicates and no null keys. If this grain ever collapses, every SUM
+    over the mart double-counts silently."""
+    n, distinct, nulls = con.execute(
+        """SELECT count(*),
+                  count(DISTINCT (member_city, care_city, service_line, network_status)),
+                  count(*) FILTER (WHERE member_city IS NULL OR care_city IS NULL
+                                      OR service_line IS NULL OR network_status IS NULL)
+           FROM marts.market_flows"""
+    ).fetchone()
+    assert n == distinct, f"{n - distinct} duplicate grain rows"
+    assert nulls == 0
+
+
 # --- the load-bearing tests: mart must agree with raw -------------------------
 
 def test_facility_metrics_appointments_agree_with_raw(con):
@@ -224,3 +239,80 @@ def test_claims_incremental_key_is_not_the_event_date(con):
     assert median_lag > 30, (
         f"claims lag now {median_lag}d — if it collapsed, revisit the lookback window"
     )
+
+
+# --- market_flows: the mart behind "what services should it offer" ------------
+
+def test_market_flows_agree_with_raw(con):
+    """Windowed allowed dollars must match a direct raw query exactly. This is
+    the mart that carries the service-line recommendation, so drift here would
+    change what we tell them to build."""
+    mart, raw = con.execute(
+        f"""SELECT (SELECT round(sum(allowed_musd), 1) FROM marts.market_flows),
+                   (SELECT round(sum(c.allowed_amount) / 1e6, 1)
+                    FROM raw.payer_claims c
+                    JOIN raw.payer_members m USING (member_id)
+                    JOIN raw.ops_facilities f ON f.facility_id = c.facility_id
+                    WHERE c.service_date >= {WIN.split(' AND ')[0]}
+                      AND c.service_date <  {WIN.split(' AND ')[1]})"""
+    ).fetchone()
+    assert mart == pytest.approx(raw, abs=0.2), f"flows {mart} vs raw {raw}"
+
+
+def test_market_flows_reconciles_to_market_summary(con):
+    """The two market marts must agree per city. They are built from the same
+    claims with the same window; if they diverge, one of them is stale."""
+    bad = con.execute(
+        """WITH f AS (SELECT member_city AS city, sum(allowed_musd) AS musd
+                      FROM marts.market_flows GROUP BY 1)
+           SELECT f.city, f.musd, s.allowed_musd
+           FROM f JOIN marts.market_summary s USING (city)
+           WHERE abs(f.musd - s.allowed_musd) > 0.15"""
+    ).fetchall()
+    assert not bad, f"market_flows disagrees with market_summary: {bad}"
+
+
+def test_q1_service_line_split_answerable_in_one_query(con):
+    """The second half of Q1 — *what services* — must be one query against one
+    mart, including for a multi-city corridor. Before market_flows this needed
+    a three-table raw join, which is the hand-assembly the marts exist to
+    remove."""
+    rows = dict((sl, pct) for sl, pct in con.execute(
+        """SELECT service_line,
+                  100.0 * sum(allowed_musd)
+                          FILTER (WHERE care_city IN ('Sacramento','Stockton','Modesto'))
+                  / sum(allowed_musd)
+           FROM marts.market_flows
+           WHERE member_city IN ('Sacramento','Stockton','Modesto')
+           GROUP BY 1"""
+    ).fetchall())
+    # The recommendation: hospital lines leak, ambulatory lines do not. If this
+    # separation ever closes, "build acute, not another clinic" stops holding.
+    for line in ("surgery", "cardiology", "er"):
+        assert rows[line] < 20.0, f"{line} now {rows[line]:.1f}% served in corridor"
+    for line in ("imaging", "primary_care", "labs", "behavioral"):
+        assert rows[line] > 60.0, f"{line} now {rows[line]:.1f}% served in corridor"
+
+
+def test_market_flows_recapture_matches_market_summary(con):
+    """Corridor recapture computed from flows must equal the market_summary
+    figure quoted on the impact slide ($33.2M). Two independent paths to the
+    same number, so a change to either is caught."""
+    flows, summary = con.execute(
+        """SELECT (SELECT sum(plan_paid_musd - if_owned_plan_paid_musd)
+                   FROM marts.market_flows
+                   WHERE member_city IN ('Sacramento','Stockton','Modesto')
+                     AND is_acute AND ownership <> 'owned'),
+                  (SELECT sum(recapture_plan_paid_musd) FROM marts.market_summary
+                   WHERE city IN ('Sacramento','Stockton','Modesto'))"""
+    ).fetchone()
+    assert flows == pytest.approx(summary, abs=0.2), f"flows {flows} vs summary {summary}"
+    assert flows == pytest.approx(33.2, abs=1.5)
+
+
+def test_market_flows_carries_no_median_column(con):
+    """Guard on the mart's one deliberate omission: a median is not additive, so
+    a distance median at this grain would be wrong the moment anyone grouped it.
+    Distance belongs in market_summary, where it is computed over claims."""
+    cols = [r[0] for r in con.execute("DESCRIBE marts.market_flows").fetchall()]
+    assert not [c for c in cols if "median" in c or "miles" in c], cols

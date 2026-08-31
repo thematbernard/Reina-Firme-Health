@@ -2,7 +2,7 @@
 
 Why: today the repo cannot be run without Redshift credentials and a ~1 hour
 extract. That is a real barrier for a reviewer who just wants to try the MCP
-server. The marts are aggregates — 7 MB fully materialized — so they travel.
+server. The marts are aggregates — 7.4 MB fully materialized — so they travel.
 
 What this is NOT: the full warehouse. `raw.*` carries member names, DOB, email,
 phone and addresses for 1.1M members and is 2.1 GB materialized. It must never
