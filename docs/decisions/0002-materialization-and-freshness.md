@@ -7,8 +7,10 @@
 
 ## Context
 
-Source access is **read-only Redshift**. We cannot create tables, views, or
-marts there, so any consistent shape has to live somewhere we control.
+Source access is **read-only Redshift** — the assignment states it directly:
+*"You'll be given read-only credentials at the start of your assessment
+window."* We cannot create tables, views, or marts there, so any consistent
+shape has to live somewhere we control.
 
 Measured, on the three questions in `evals/query_path_benchmark.py`:
 

@@ -6,6 +6,10 @@ weeks.
 
 **Both questions are answered, and one of them turned out to be wrong.**
 
+> **Technical write-up (the 1–3 page deliverable): [docs/write-up.md](docs/write-up.md)** —
+> architecture, key decisions and tradeoffs, assumptions, and what I'd build next.
+> This README is the longer reference behind it.
+
 - **Where should we open next?** Sacramento — as an acute-care hospital, not
   another clinic. 55,183 members (50,618 active), **zero owned hospitals and zero owned urgent
   cares**, and members travel a **median 75.5 miles** for acute care (95.7% over
@@ -99,7 +103,7 @@ make build             # extract → marts → docs → portable  (~1 hr, mostly
 make test              # 130 tests, ~11s
 ```
 
-Then ask Claude: *"Where should we open our next facility?"*
+Then ask Claude: *"Where should we open the next clinic?"*
 
 > **Restart your MCP client after changing code or the semantic layer.** Servers
 > start once per session, so edits do not reach a running process. Compare
@@ -266,6 +270,15 @@ See **[docs/roadmap.md](docs/roadmap.md)**. Highest value first:
    leaving raw SQL as the escape hatch.
 6. **Real drive time** — 252 isochrone polygons sit unused; this almost certainly
    *strengthens* the Sacramento case.
+
+## Tools used
+
+Built with **Claude Code** (Claude Opus 5) as the primary development
+environment — pipeline and mart SQL, tests, the MCP server, and documentation
+drafting, all reviewed and corrected by hand. Stack: Python, DuckDB, PyArrow,
+`psycopg`/`psql` against Redshift, `pytest`, `uv`, and the Model Context Protocol
+Python SDK. The eval harness drives the `claude -p` CLI over the real stdio MCP
+transport, so the same tooling appears in the product and in its tests.
 
 ## Time spent
 
