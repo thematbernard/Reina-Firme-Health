@@ -16,3 +16,4 @@ __pycache__/
 # of aggregate figures with no member/patient identifiers (scanned). Committed
 # deliberately; re-ignore it only if a run starts carrying row-level output.
 # evals/results.json
+evals/results.partial.json

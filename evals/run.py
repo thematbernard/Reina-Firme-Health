@@ -297,12 +297,21 @@ def main():
                     help="sdk: anthropic SDK + in-process tools (needs a key). "
                          "cli: `claude -p` over the real stdio MCP transport "
                          "(uses the Claude Code CLI's credential)")
-    ap.add_argument("--out", default=str(Path(__file__).parent / "results.json"))
+    ap.add_argument("--out", help="results file (default: results.json for a "
+                                  "full run, results.partial.json for a subset)")
     args = ap.parse_args()
 
     cases = [c for c in CASES if not args.case or c["id"] in args.case]
     if not cases:
         raise SystemExit(f"no cases matched {args.case}")
+
+    # A subset run must never overwrite results.json. That file is the cited
+    # evidence for the headline pass rate, and demoing a single case live used
+    # to clobber 9/11 with 1/1 — silently, and after the claim was already made.
+    if args.out is None:
+        full = len(cases) == len(CASES) and args.reps == 1
+        args.out = str(Path(__file__).parent /
+                       ("results.json" if full else "results.partial.json"))
 
     if args.dry_run:
         print(f"{len(cases)} case(s), {args.reps} rep(s), "
