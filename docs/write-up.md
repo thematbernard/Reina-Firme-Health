@@ -13,7 +13,7 @@ number, [analysis/](../analysis) for the two answers in full, and
 ## The answers, first
 
 **Where should we open the next clinic?** Not a clinic. Open in **Sacramento, as
-an acute-care hospital** — ~200 beds and 12–14 ORs, built for surgery,
+an acute-care hospital** — ~110 beds and 6–8 ORs, built for surgery,
 cardiology and an emergency department. Sacramento has 50,618 active members and
 **zero owned hospitals, zero owned urgent cares**. Its members travel a median
 **75.5 miles** for acute care against Atlanta's 9.1, and 95.7% of acute claims
@@ -78,7 +78,7 @@ must remember* to *impossible to express*. Tradeoff: **the guarantee stops at
 the mart edge.** Off-mart questions fall back to `raw.*`, where caveats revert
 to prose — and that is exactly where the one real eval failure happened.
 
-**Test the data and the agent separately.** `make test` runs **152**
+**Test the data and the agent separately.** `make test` runs **154**
 deterministic tests in ~16s with no AI involved: mart grain, reconciliation back
 to source, and guards that retired caveats have not crept back. Several tests
 pin the *conclusions* of this write-up, including one asserting that recapture
@@ -107,15 +107,20 @@ contributors.
    ~62% utilization (measured: **51.7–54.6%** on operating days). Every number
    here is internally consistent with the data. This makes the $33.2M
    opportunity conservative relative to the brief's own economics.
-2. **A "market" is a city.** Both member population and facility footprint are
-   keyed on city, so supply and demand are comparable. Real catchments are not
-   city-shaped; the corridor analysis is the partial correction.
+2. **A "market" is a city, and a *catchment* is not a market.** Marts key both
+   member population and facility footprint on city so supply and demand are
+   comparable. Catchment is measured separately, by distance: 100% of Sacramento
+   members sit within 45 miles of the proposed site, 32% of Stockton, and **0% of
+   Modesto (median 71.9 miles)**. The three-market region is a $33.2M
+   opportunity; the *building* serves ~60,500 members and ~$19.7M of it. An
+   earlier draft conflated the two and oversized the facility by roughly 2x.
 3. **Distances are straight-line (haversine), not drive time.** 252 isochrone
    polygons in `external.drive_time_isochrones` are unused. This almost
    certainly *understates* Sacramento's disadvantage, so measuring it should
    strengthen the recommendation.
-4. **$33.2M assumes full recapture** at current owned cost ratios. It is a
-   ceiling on the operating case, not a forecast.
+4. **$33.2M assumes full recapture** at current owned cost ratios, across all
+   three markets. It is a ceiling on the regional case, not a forecast, and not
+   the single-facility figure (~$19.7M).
 5. **The dataset is near-uniform synthetic data.** CV 0.68% across 64 clinics
    means no facility-level *performance* question is answerable here. That is a
    property of the data, not a modelling choice — and it is the reason question

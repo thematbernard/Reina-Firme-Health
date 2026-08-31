@@ -125,7 +125,7 @@ Then ask Claude: *"Where should we open the next clinic?"*
 | `extract` / `marts` / `docs` | pull to parquet; build marts; regenerate `schema.md` |
 | `portable` | export the 7.4 MB PII-free marts-only warehouse |
 | `build` | `extract` + `marts` + `docs` + `portable` |
-| `test` | 152 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
+| `test` | 154 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |

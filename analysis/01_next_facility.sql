@@ -76,6 +76,60 @@ SELECT sum(members_active)                     AS corridor_active_members,
 FROM marts.market_summary
 WHERE city IN ('Sacramento', 'Stockton', 'Modesto');
 
+-- §3 — the corridor is a region, not a catchment.
+-- Straight-line miles from the Sacramento owned-clinic centroid to active
+-- member homes. Modesto's median is 71.9 -- the same trip §1 calls
+-- unacceptable -- so a Sacramento hospital does not serve it.
+WITH sac AS (
+    SELECT avg(latitude) AS lat, avg(longitude) AS lon
+    FROM raw.ops_facilities WHERE ownership = 'owned' AND city = 'Sacramento'
+),
+mem AS (
+    SELECT city, latitude AS lat, longitude AS lon
+    FROM raw.payer_members
+    WHERE city IN ('Sacramento', 'Stockton', 'Modesto')
+      AND enrollment_date <= current_date
+      AND (termination_date IS NULL OR termination_date > current_date)
+),
+d AS (
+    SELECT m.city,
+           3959 * 2 * asin(sqrt(pow(sin(radians(s.lat - m.lat) / 2), 2)
+             + cos(radians(m.lat)) * cos(radians(s.lat))
+               * pow(sin(radians(s.lon - m.lon) / 2), 2))) AS mi
+    FROM mem m CROSS JOIN sac s
+)
+SELECT city,
+       count(*)                                                        AS active_members,
+       round(median(mi), 1)                                            AS median_miles_to_site,
+       round(100.0 * count(*) FILTER (WHERE mi <= 30) / count(*), 1)   AS pct_within_30mi,
+       round(100.0 * count(*) FILTER (WHERE mi <= 45) / count(*), 1)   AS pct_within_45mi
+FROM d GROUP BY 1 ORDER BY 2 DESC;
+
+-- §5 — sizing anchors: capacity per active member, network and Atlanta-only.
+-- Observed utilization cannot validate a capacity plan here (all 8 owned
+-- hospitals sit at 54.1-55.4% occupancy regardless of size), so per-member
+-- ratios are the only defensible basis.
+WITH net AS (
+    SELECT sum(total_beds) AS beds, sum(total_ors) AS ors
+    FROM marts.facility_metrics WHERE ownership = 'owned'
+),
+book AS (SELECT sum(members_active) AS m FROM marts.market_summary),
+atl AS (
+    SELECT total_beds AS beds, total_ors AS ors
+    FROM marts.facility_metrics WHERE facility_id = 'FAC-00006'
+),
+catchment(label, members) AS (
+    VALUES ('Sacramento only', 50615),
+           ('Sacramento + reachable Stockton', 60515),
+           ('all three markets', 102540)
+)
+SELECT c.label,
+       c.members,
+       round(net.beds * c.members / book.m)              AS beds_network_ratio,
+       round(atl.beds * c.members / 122480.0)            AS beds_atlanta_ratio,
+       round(net.ors  * c.members / book.m, 1)           AS ors_network_ratio
+FROM catchment c CROSS JOIN net CROSS JOIN book CROSS JOIN atl;
+
 -- §4 — what services: only the hospital lines leak.
 -- One table, no joins. This is the query the recommendation turns on: ~12%
 -- served locally for the hospital lines, ~72% for ambulatory. Note the

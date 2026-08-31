@@ -369,3 +369,58 @@ def test_facility_count_error_does_not_explain_the_40pct(con):
     assert rows["Sacramento"] > rows["Atlanta"], (
         "unfiltered facility counts favour Sacramento — this cannot produce -40%"
     )
+
+
+def test_corridor_is_not_one_catchment(con):
+    """Pins the correction to the Q1 sizing: Sacramento, Stockton and Modesto are
+    a three-market *region*, not one hospital's catchment. Modesto's members sit
+    ~72 miles from a Sacramento site — the same trip the analysis calls
+    unacceptable — so the facility is sized for Sacramento plus the reachable
+    part of Stockton (~60,500), not for all 102,540. If this ever stops holding,
+    the ~110-bed recommendation must be re-derived."""
+    rows = dict((c, (n, med, p45)) for c, n, med, p45 in con.execute(
+        """WITH sac AS (SELECT avg(latitude) lat, avg(longitude) lon
+                        FROM raw.ops_facilities
+                        WHERE ownership='owned' AND city='Sacramento'),
+                mem AS (SELECT city, latitude lat, longitude lon
+                        FROM raw.payer_members
+                        WHERE city IN ('Sacramento','Stockton','Modesto')
+                          AND enrollment_date <= current_date
+                          AND (termination_date IS NULL OR termination_date > current_date)),
+                d AS (SELECT m.city, 3959*2*asin(sqrt(
+                               pow(sin(radians(s.lat-m.lat)/2),2)
+                             + cos(radians(m.lat))*cos(radians(s.lat))
+                               * pow(sin(radians(s.lon-m.lon)/2),2))) mi
+                      FROM mem m CROSS JOIN sac s)
+           SELECT city, count(*), median(mi),
+                  100.0*count(*) FILTER (WHERE mi <= 45)/count(*)
+           FROM d GROUP BY 1"""
+    ).fetchall())
+    assert rows["Sacramento"][2] == pytest.approx(100.0, abs=1.0)
+    assert rows["Stockton"][2] < 60.0, "Stockton now mostly reachable — resize"
+    assert rows["Modesto"][2] < 5.0, "Modesto now reachable — the corridor case changes"
+    assert rows["Modesto"][1] > 60.0, f"Modesto median now {rows['Modesto'][1]:.1f} mi"
+    # the sized catchment is Sacramento plus the reachable share of Stockton
+    reachable = rows["Sacramento"][0] + rows["Stockton"][0] * rows["Stockton"][2] / 100
+    assert 55_000 < reachable < 70_000, f"catchment now {reachable:,.0f}"
+
+
+def test_sizing_anchors_agree_on_roughly_110_beds(con):
+    """Two independent per-member anchors — network-wide capacity and Atlanta's
+    own ratio — must both land near the ~110 beds / 6-8 ORs on slide 2. The
+    earlier ~200-bed figure came from copying Atlanta's absolute size onto a
+    market 41% as large; this guards against that returning."""
+    beds, ors, book, atl_beds, atl_ors = con.execute(
+        """SELECT (SELECT sum(total_beds) FROM marts.facility_metrics WHERE ownership='owned'),
+                  (SELECT sum(total_ors)  FROM marts.facility_metrics WHERE ownership='owned'),
+                  (SELECT sum(members_active) FROM marts.market_summary),
+                  (SELECT total_beds FROM marts.facility_metrics WHERE facility_id='FAC-00006'),
+                  (SELECT total_ors  FROM marts.facility_metrics WHERE facility_id='FAC-00006')"""
+    ).fetchone()
+    catchment = 60_500
+    network_beds = beds * catchment / book
+    atlanta_beds = atl_beds * catchment / 122_480
+    network_ors = ors * catchment / book
+    assert 85 <= atlanta_beds <= 135, atlanta_beds
+    assert 85 <= network_beds <= 145, network_beds
+    assert 4.0 <= network_ors <= 9.0, network_ors

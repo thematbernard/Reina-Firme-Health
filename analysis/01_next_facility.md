@@ -50,15 +50,33 @@ travels 12.6 miles; Sacramento's leaves and travels 75.5. Distance is the
 measure that separates the two markets, which is why the recommendation rests
 on it.
 
-## 3. Sacramento anchors a three-city corridor
+## 3. Sacramento anchors a three-market region — but not one catchment
 
-Stockton (48.9 median miles) and Modesto (53.2) have the same problem and no
-owned hospital either. Together:
+Stockton (48.9 median miles to acute care) and Modesto (53.2) have the same
+structural problem and no owned hospital either. As a region:
 
-- **102,540 active members** — comparable to Atlanta's 122,480, which supports
-  one 206-bed owned hospital
+- **102,540 active members**
 - **$33.2M/yr** recoverable plan-paid spend (Sacramento $16.5M, Stockton $10.0M,
   Modesto $6.7M)
+
+**That is a regional opportunity, not a single building's business case, and the
+distinction is load-bearing.** Measured from the Sacramento owned-clinic
+centroid to active member homes:
+
+| market | members | median miles | within 30mi | within 45mi |
+|---|---|---|---|---|
+| Sacramento | 50,615 | 3.8 | 100% | 100% |
+| Stockton | 30,784 | 46.1 | 0.2% | **32.3%** |
+| Modesto | 21,136 | 71.9 | 0% | **0%** |
+
+Modesto's members sit **71.9 miles** from a Sacramento site — essentially the
+same 75.5-mile trip this analysis calls unacceptable. By its own standard, a
+Sacramento hospital does not serve Modesto. A realistic catchment is Sacramento
+plus the ~32% of Stockton inside 45 miles: **~60,500 active members**, and
+**~$19.7M/yr** of the $33.2M.
+
+Stockton is the phase-2 site, on its own merits (30,784 members, 48.9 median
+miles, 93.1% over 30). Modesto is a third decision, not a spillover.
 
 ## 4. What services — only the hospital lines are leaking
 
@@ -93,9 +111,24 @@ is the only line where distance is a clinical risk rather than an inconvenience.
 
 ## 5. Sizing and the financial case
 
-**~200 beds, 12–14 ORs**, benchmarked on Atlanta's owned hospital (FAC-00006:
-206 beds, 12 ORs, serving 122,480 active members at 53.3% OR utilization and
-54.7% bed occupancy).
+**~110 beds, 6–8 ORs**, for a catchment of ~60,500 active members (Sacramento
+plus the reachable third of Stockton). Three independent anchors agree:
+
+| basis | beds | ORs |
+|---|---|---|
+| network capacity per active member (2,147 beds, 114 ORs, 1,008,234 members) | 129 | 6.8 |
+| Atlanta FAC-00006's own ratio (206 beds, 12 ORs, 122,480 members) | 102 | 5.9 |
+| Sacramento-only, network ratio (50,615 members) | 108 | 5.7 |
+
+**An earlier draft of this analysis said ~200 beds and 12–14 ORs.** That took
+Atlanta's absolute hospital size as the template without scaling for a market
+41% its size, and it implicitly assumed the whole corridor was one catchment —
+which §3 shows it is not. The corrected figure is roughly half.
+
+Note that observed utilization cannot validate a capacity plan in this dataset:
+all eight owned hospitals run 54.1–55.4% bed occupancy regardless of size, the
+441-bed and 206-bed hospitals within 0.7pp of each other (caveat C6 again). The
+per-member ratios are the only defensible anchor.
 
 **Do not "just redirect volume to existing capacity."** All eight owned hospitals
 have headroom — OR utilization 51.7–54.6%, bed occupancy 54.1–55.4% — but the
