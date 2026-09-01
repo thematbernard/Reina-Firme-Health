@@ -272,6 +272,28 @@ def run_query(sql: str) -> str:
     return _format(cols, rows[:MAX_ROWS], truncated=len(rows) > MAX_ROWS)
 
 
+def build_log_handlers() -> list[logging.Handler]:
+    """stderr always; REINA_LOG_FILE adds a file a second pane can `tail -f`.
+
+    Why a file at all, when everything already goes to stderr: a client is not
+    obliged to drain the child's stderr, and Claude Code only does so during the
+    connection handshake. Measured — the startup line below reaches the client's
+    MCP log, and not one per-tool line after it does. So on stdio the SQL log is
+    written and then discarded, which is the worst of both. A file handler makes
+    the same records observable without changing transport.
+
+    Failure to open is fatal rather than silent: the whole point of this handler
+    is that logs stop vanishing.
+    """
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
+    if path := os.environ.get("REINA_LOG_FILE"):
+        try:
+            handlers.append(logging.FileHandler(path, encoding="utf-8"))
+        except OSError as e:
+            raise SystemExit(f"REINA_LOG_FILE={path!r} is not writable: {e}")
+    return handlers
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -284,10 +306,15 @@ if __name__ == "__main__":
 
     # Configure only under __main__: importing this module (tests, probe.py)
     # must not reconfigure the host process's logging.
+    # force=True is load-bearing: importing the MCP SDK installs a root
+    # StreamHandler, and basicConfig is a no-op when the root logger already has
+    # one. Without it this call silently did nothing — no timestamps, and
+    # REINA_LOG_LEVEL/REINA_LOG_FILE both ignored.
     logging.basicConfig(
         level=os.environ.get("REINA_LOG_LEVEL", "INFO").upper(),
-        stream=sys.stderr,
+        handlers=build_log_handlers(),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,
     )
     # Uvicorn logs one access line per JSON-RPC POST — five per tool call, all
     # "POST /mcp 200". That carries nothing the per-tool log lines below don't,

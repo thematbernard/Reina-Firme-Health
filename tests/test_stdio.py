@@ -372,3 +372,56 @@ def test_diagnostics_never_reach_stdout():
     )
     assert "starting reina-firme-analytics" in proc.stderr
     assert "starting reina-firme-analytics" not in proc.stdout
+
+
+def test_log_file_captures_tool_calls(tmp_path):
+    """REINA_LOG_FILE must receive the same records stderr gets.
+
+    Motivating measurement: Claude Code drains the server's stderr only during
+    the connection handshake, so the startup banner reaches its MCP log and no
+    per-tool line after it does. The SQL log existed but was unobservable on the
+    demo transport. This pins the file handler that fixes that, and with it the
+    force=True on basicConfig — without that flag the SDK's own root handler
+    wins and this file stays empty.
+    """
+    import os
+    import subprocess
+
+    log_file = tmp_path / "server.log"
+    env = os.environ | {"REINA_LOG_FILE": str(log_file)}
+    params = StdioServerParameters(
+        command=sys.executable, args=[str(SERVER)], cwd=str(ROOT), env=env
+    )
+
+    async def main():
+        with anyio.fail_after(TIMEOUT):
+            async with stdio_client(params, errlog=subprocess.DEVNULL) as (r, w):
+                async with ClientSession(r, w) as session:
+                    await session.initialize()
+                    await session.call_tool("run_query", {"sql": "SELECT 1 AS n"})
+                    await session.call_tool("run_query", {"sql": "SELECT nope"})
+
+    anyio.run(main)
+    body = log_file.read_text()
+
+    assert "starting reina-firme-analytics" in body
+    assert "run_query: SELECT 1 AS n" in body      # the SQL, not just a timing
+    assert "run_query returned 1 rows" in body
+    assert "WARNING" in body and "run_query failed" in body
+    # the format basicConfig asks for is actually applied
+    assert "INFO __main__:" in body
+
+
+def test_unwritable_log_file_fails_loudly(tmp_path):
+    """Silent log loss is the bug being fixed, so refusing to start beats
+    starting with logging quietly broken."""
+    import os
+    import subprocess
+
+    env = os.environ | {"REINA_LOG_FILE": str(tmp_path / "no" / "such" / "dir.log")}
+    proc = subprocess.run(
+        [sys.executable, str(SERVER)], cwd=str(ROOT), env=env,
+        input="", capture_output=True, text=True, timeout=TIMEOUT,
+    )
+    assert proc.returncode != 0
+    assert "REINA_LOG_FILE" in proc.stderr and "not writable" in proc.stderr

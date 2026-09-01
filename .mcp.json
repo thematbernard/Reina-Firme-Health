@@ -2,7 +2,15 @@
   "mcpServers": {
     "reina-firme-analytics": {
       "command": "uv",
-      "args": ["run", "--project", ".", "mcp_server/server.py"]
+      "args": [
+        "run",
+        "--project",
+        ".",
+        "mcp_server/server.py"
+      ],
+      "env": {
+        "REINA_LOG_FILE": "/tmp/reina-mcp.log"
+      }
     }
   }
 }
