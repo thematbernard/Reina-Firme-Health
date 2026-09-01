@@ -1,4 +1,4 @@
-.PHONY: check profile extract load marts docs portable build test evals evals-cli identity-quality benchmark analysis fingerprint golden server-info serve serve-http demo logs all
+.PHONY: check profile extract load marts docs portable build test evals evals-cli ablation identity-quality benchmark analysis fingerprint golden server-info serve serve-http demo logs all
 
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
@@ -26,6 +26,9 @@ evals:        ## agent-level evals via the Anthropic SDK (needs an Anthropic cre
 
 evals-cli:    ## same cases via `claude -p` over real MCP stdio (no API key needed)
 	uv run python evals/run.py --runner cli
+
+ablation:     ## discovery test: de-stained dictionary, fresh `claude -p`, does it still find Q1?
+	uv run python evals/ablation.py
 
 identity-quality: ## measure crosswalk precision + recall (no API needed)
 	uv run python evals/identity_quality.py

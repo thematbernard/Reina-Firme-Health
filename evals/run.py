@@ -207,7 +207,8 @@ def judge_cli(case: dict, answer: str) -> dict:
     """Grade via the CLI, using the same JUDGE_PROMPT as the sdk path."""
     prompt = JUDGE_PROMPT.format(
         question=case["question"], kind=case["kind"], expected=case["expected"],
-        must_include=case["must_include"] or "(none specified)", answer=answer,
+        must_include=case["must_include"] or "(none specified)",
+        rubric=_rubric(case), answer=answer,
     )
     try:
         blob = _claude(prompt, with_tools=False)
@@ -221,6 +222,19 @@ def judge_cli(case: dict, answer: str) -> dict:
         return json.loads(m.group(0))
     except json.JSONDecodeError as e:
         return {"verdict": "FAIL", "reason": f"unparseable judge JSON: {e}"}
+
+
+def _rubric(case: dict) -> str:
+    """Rubric points as a numbered list, or a no-op line when a case has none.
+
+    Cases whose answer is a recommendation cannot be graded by string match: the
+    conclusion is a city name the dictionary must not contain, so the only honest
+    check is whether the agent reached it by a defensible route.
+    """
+    points = case.get("rubric")
+    if not points:
+        return "(no additional rubric — grade against the ground truth above)"
+    return "\n" + "\n".join(f"  {i}. {p}" for i, p in enumerate(points, 1))
 
 
 JUDGE_PROMPT = """You are grading an analytics agent's answer against independently verified ground truth.
@@ -240,6 +254,10 @@ VERIFIED GROUND TRUTH: {expected}
 
 REQUIRED CONTENT (numbers may be formatted differently, e.g. 55183 / 55,183 /
 "about 55 thousand"; accept within 2%): {must_include}
+
+RUBRIC — every listed point must hold for `correct` to be true. Grade the
+reasoning, not the vocabulary: an answer that states the right conclusion by the
+wrong route FAILS. {rubric}
 
 AGENT'S ANSWER:
 ---
@@ -265,6 +283,7 @@ def judge(client, case: dict, answer: str) -> dict:
             question=case["question"], kind=case["kind"],
             expected=case["expected"],
             must_include=case["must_include"] or "(none specified)",
+            rubric=_rubric(case),
             answer=answer,
         )}],
     )

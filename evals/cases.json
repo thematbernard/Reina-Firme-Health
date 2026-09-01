@@ -9,7 +9,10 @@
     "the semantic layer stops the agent inventing an answer.",
     "raw_navigation_prevalence is the ungoverned-path case: no mart carries clinical",
     "data, so the agent must navigate raw.* with only the dictionary to protect it —",
-    "it measures whether the mart-layer guarantee generalizes past the two questions."
+    "it measures whether the mart-layer guarantee generalizes past the two questions.",
+    "rubric (optional): reasoning points the judge must ALL see for a pass. Used where",
+    "the conclusion is a name the dictionary must not contain, so a string match would",
+    "be circular — see next_facility and evals/ablation.py."
   ],
   "cases": [
     {
@@ -56,9 +59,15 @@
       "id": "next_facility",
       "kind": "analytical",
       "question": "Where should we open our next facility, and what services should it offer?",
-      "expected": "Sacramento: 55,183 members, zero owned hospital and zero owned urgent care, ~83% of allowed dollars leaving the market ($228M/yr), 92.8% of hospital claims out of market. Recommendation should be acute care (hospital and/or urgent care), not another clinic.",
-      "must_include": ["Sacramento"],
-      "must_not": []
+      "expected": "Sacramento, and an acute-care build (surgery, cardiology, ED) rather than another clinic: 50,615 active members, zero owned hospital and zero owned urgent care, 75.5 median miles to acute care against Atlanta's 9.1, 95.7% of acute claims served over 30 miles from home. Graded on route, not on the city name — the dictionary no longer states this conclusion, so naming Sacramento without a supporting measure is not a pass.",
+      "must_include": [],
+      "must_not": ["highest recapture", "largest recapture opportunity", "owned share is higher"],
+      "rubric": [
+        "recommends acute-care capacity (hospital and/or urgent care), not another clinic",
+        "selects the market on a measure shown to vary — distance to acute care, in-market acute retention, or owned hospital/urgent-care count",
+        "does not select the market on owned-vs-partner dollar share (caveat C6: 61-63% in every city) or on absolute recapture dollars alone (which rank Atlanta $39.5M and San Antonio $38.3M above Sacramento $16.5M, purely on market size)",
+        "names at least one specific service line to build (surgery, cardiology or ER)"
+      ]
     },
     {
       "id": "sacramento_40pct_gap",

@@ -157,12 +157,6 @@ produce comes from the denominator, not the numerator — panel-normalized
 utilization has a 3.18x spread purely because panel size varies while
 throughput does not. See `analysis/02_sacramento_vs_atlanta.md`.
 
-**C2b. Sacramento vs Atlanta specifically.** Size-matched clinics differ by
-0.4%, and Sacramento sits at or above Atlanta on every normalized measure. The
-real Sacramento finding is network composition: 55,183 members (50,618 active), zero owned
-hospital and zero owned urgent care, 92.8% of hospital claims leaving the
-market, $228M/yr of allowed spend going out of market vs Atlanta's 31%.
-
 **C3. Future-dated rows exist.** `payer_members.dob` and `enrollment_date`
 extend to 2026-12-28, and `termination_date`/`eligibility.end_date` to 2030.
 Filter on `current_date` when computing age or active enrollment.
@@ -180,10 +174,8 @@ facilities per city without `ownership='owned'` inflates the owned footprint by
 **C6. Owned-vs-partner dollar share is uniform network-wide — it carries no
 cross-market signal.** Share of member allowed dollars at owned facilities sits
 between 61.3% and 62.4% in *every* city. Do not rank markets by owned share, or
-by partner/leakage share, and do not read a 0.5pp difference as a finding. The
-measures that genuinely vary by market are **geographic**: in-market retention,
-distance to the serving facility, and owned facility composition by type. Build
-market comparisons on those.
+by partner/leakage share, and do not read a 0.5pp difference as a finding.
+Rank markets on measures shown to vary.
 
 ## Where to look things up
 

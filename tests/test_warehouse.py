@@ -230,6 +230,38 @@ def test_dictionary_defers_column_facts_to_generated_schema():
         assert line.count(",") < 5, f"dictionary.md:{i} looks like a column list"
 
 
+def test_dictionary_states_no_recommendation():
+    """The dictionary may state measured properties of the data; it may not state
+    conclusions about the business questions.
+
+    The agent is instructed to read `get_data_dictionary` before writing any SQL,
+    so a conclusion parked there is one the agent recites rather than finds. An
+    earlier C2b did exactly that — it named the market, the missing facility type
+    and the leakage figure, i.e. the whole of Q1's answer. `evals/ablation.py`
+    then showed the agent reaches the same recommendation without it, so the
+    block cost nothing to remove. This keeps it removed.
+
+    Naming a market is fine (C5 counts its facilities). Naming a market next to a
+    recommendation verb is not."""
+    hand = (ROOT / "semantic" / "dictionary.md").read_text()
+    assert "## Tables" not in hand, "generated schema must not be inlined here"
+
+    with duckdb.connect(str(DB), read_only=True) as con:
+        cities = [r[0] for r in con.execute(
+            "SELECT city FROM marts.market_summary").fetchall()]
+
+    verbs = ("open", "build", "the real finding", "recommend", "next facility",
+             "should site", "expand into")
+    for i, line in enumerate(hand.splitlines(), 1):
+        low = line.lower()
+        if not any(c in line for c in cities):
+            continue
+        hit = [v for v in verbs if v in low]
+        assert not hit, (
+            f"dictionary.md:{i} names a market alongside {hit} — that is a "
+            f"conclusion, not a measured property:\n  {line.strip()}")
+
+
 # --- analysis findings must stay reproducible --------------------------------
 # These pin the conclusions in analysis/02_sacramento_vs_atlanta.md. If the
 # warehouse is rebuilt and these move, the analysis prose is stale.

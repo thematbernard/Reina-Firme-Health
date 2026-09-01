@@ -90,13 +90,13 @@ deliverable. Validation is bounded here on purpose.
 
 ## Honest limitations
 
-- **The cold run tests the product, not discovery.** `get_data_dictionary` now
-  carries caveats C1/C2/C2b, which state that clinic volume is uniform and a
+- **The cold run tests the product, not discovery.** `get_data_dictionary`
+  carries caveats C1/C2, which state that clinic volume is uniform and a
   40% gap is not constructible. So C measures *"does the semantic layer
   successfully steer the agent"* — the actual product claim — not *"could a
   model find this unaided."* Both are worth knowing; only the first is what we
-  ship. Testing the second would mean serving a caveat-free dictionary, which
-  is a deliberate future experiment, not this one.
+  ship. **Superseded in part: the discovery experiment has now been run — see
+  "Discovery ablation" below.**
 - **C is a single sample.** Non-determinism is unmeasured until A runs with
   `--reps 3`. Any pass rate quoted from one run is an anecdote, and will be
   labelled as such.
@@ -178,11 +178,59 @@ this whole test architecture exists to catch — including when the agent is
 right about everything else.
 
 **The limitation we predicted was confirmed, unprompted.** The agent itself
-flagged that `get_data_dictionary` embeds prior conclusions in its caveats
-(C2/C2b state the Sacramento answer), so it "can't claim to have been blind to
-the expected conclusion." That is the ADR's stated limitation, verified from the
-inside. It does not invalidate the run — steering the agent correctly *is* the
-product — but the write-up must not claim unaided discovery.
+flagged that `get_data_dictionary` embedded prior conclusions in its caveats
+(C2b stated the Sacramento answer outright), so it "can't claim to have been
+blind to the expected conclusion." That is the ADR's stated limitation, verified
+from the inside.
+
+## Discovery ablation — the caveat-free experiment, run
+
+The limitation above was addressed rather than merely disclosed. C2b named the
+market, the missing facility type and the leakage figure — the whole of Q1's
+answer — in the file the agent is told to read before writing any SQL. C6 went
+further than its own measurement and prescribed the geographic measures that
+select that market.
+
+**Both are now removed**, on this rule: *the dictionary may state measured
+properties of the data; it may not state conclusions about the business
+questions.* C1–C5 comply and stay. `test_dictionary_states_no_recommendation`
+pins the rule; `evals/ablation.py` (`make ablation`) re-runs the experiment.
+
+The experiment: strip every caveat block naming a market — which now removes
+only C5's facility-counting example, leaving one market mention in the
+hand-written layer (the org description, "Northern California, Greater Atlanta
+and Central Texas", a fact about the company rather than a conclusion) — then
+put the Q1 question to a fresh `claude -p` over real MCP stdio against the real
+warehouse.
+
+**All three runs reached the same recommendation — Sacramento, acute care,
+surgery / cardiology / ED — in 14–18 turns each**, every one of them citing an
+access measure rather than dollar share or absolute recapture. Recorded in
+`evals/ablation.json`. One rejected the alternative ranking unprompted:
+
+> Ranking markets by `recapture_plan_paid_musd` puts Atlanta ($39.5M) and San
+> Antonio ($38.3M) first — but that ranking is almost perfectly collinear with
+> market size, and both already have an owned hospital. It's a size artifact,
+> not an opportunity signal. […] The genuine outlier is access.
+
+That is the load-bearing step of `analysis/01_next_facility.md`, reconstructed
+without the steer. Two things this does *not* license:
+
+- **Three runs is a weak consensus measure.** 3/3 is consistent with a wide
+  range of true rates. Quote it as "3 of 3 runs", never as "the agent always
+  finds it"; raise `--runs` if the claim needs to carry more weight.
+- **The marts still model `median_miles_to_acute` and `pct_acute_over_30mi`.**
+  That is product design, not prompt staining — the same mart ships
+  `recapture_plan_paid_musd`, which points at Atlanta. The ablated agent saw
+  both and argued its way to the geographic one. Removing the columns would
+  test a different product.
+
+The ablation also surfaced a genuine gap the other direction: it treated
+Sacramento / Stockton / Modesto as **one catchment**, which §3 of
+`analysis/01_next_facility.md` disproves (Modesto sits 71.9 miles from a
+Sacramento site). The corridor correction is analysis that was added, not
+dictionary content restated — useful evidence the write-up is not a paraphrase
+of its own semantic layer.
 
 Test count went 81 -> 85. Remaining gap unchanged: **nothing has yet exercised
 MCP stdio**, which still needs a human running `make serve` from a real client.

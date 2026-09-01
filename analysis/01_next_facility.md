@@ -166,6 +166,13 @@ frees SF/Fremont OR and bed capacity and removes an 85-mile access barrier.
   `raw.external_drive_time_isochrones` holds 252 precomputed polygons and is
   unused. This almost certainly *understates* Sacramento's disadvantage, so it
   strengthens the recommendation — but it should be measured.
+- **This conclusion is not an artefact of the semantic layer.** An earlier
+  caveat C2b stated it outright in `semantic/dictionary.md`, which the agent
+  reads before writing any SQL. C2b is gone; with every market-naming caveat
+  stripped, 3 of 3 fresh agent runs still reach Sacramento and acute care on
+  an access measure (`make ablation`, `evals/ablation.json`). Note those runs
+  treated the corridor as one catchment — the §3 correction is not something
+  the dictionary supplies.
 - **No capital cost, staffing, licensure or CON analysis here.** This sizes the
   demand-side opportunity only.
 - **Demographics do not differentiate markets** in this data (average age

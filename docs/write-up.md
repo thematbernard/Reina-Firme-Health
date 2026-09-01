@@ -78,7 +78,7 @@ must remember* to *impossible to express*. Tradeoff: **the guarantee stops at
 the mart edge.** Off-mart questions fall back to `raw.*`, where caveats revert
 to prose — and that is exactly where the one real eval failure happened.
 
-**Test the data and the agent separately.** `make test` runs **156**
+**Test the data and the agent separately.** `make test` runs **157**
 deterministic tests in ~16s with no AI involved: mart grain, reconciliation back
 to source, and guards that retired caveats have not crept back. Several tests
 pin the *conclusions* of this write-up, including one asserting that recapture

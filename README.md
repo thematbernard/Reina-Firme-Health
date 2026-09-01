@@ -45,11 +45,12 @@ wrong answers. The marts make five of them structurally impossible.
 ## Architecture
 
 A **mart** is a table modelled for a question rather than for a source system:
-a fixed grain — one row per facility, per market, per patient-member link — with
-the joins and business rules already applied. The three here exist because the
-alternative was documentation: telling the agent how to assemble `raw.*`
-correctly on every query. Their grains were chosen to retire specific measured
-caveats, not to mirror source; see [semantic/dictionary.md](semantic/dictionary.md).
+a fixed grain — one row per facility, per market, per member-city flow, per
+patient-member link — with the joins and business rules already applied. The
+four here exist because the alternative was documentation: telling the agent how
+to assemble `raw.*` correctly on every query. Their grains were chosen to retire
+specific measured caveats, not to mirror source; see
+[semantic/dictionary.md](semantic/dictionary.md).
 
 ```
 Redshift (read-only)
@@ -100,7 +101,7 @@ make serve             # stdio; or add to Claude Desktop via .mcp.json
 cp .env.example .env   # host, port, database, username, password
 make check             # connectivity smoke test
 make build             # extract → marts → docs → portable  (~1 hr, mostly extract)
-make test              # 130 tests, ~11s
+make test              # 156 tests, ~16s
 ```
 
 Then ask Claude: *"Where should we open the next clinic?"*
@@ -116,6 +117,7 @@ Then ask Claude: *"Where should we open the next clinic?"*
 |---|---|
 | `REINA_DB` | override the warehouse path; the server still detects full vs marts-only from the data |
 | `REINA_LOG_LEVEL` | server log level, default `INFO`. Logs go to **stderr** — stdout carries the JSON-RPC frames on stdio, so nothing else may write there |
+| `REINA_LOG_FILE` | also append logs to this file. Set it to watch queries live (`tail -f`): a client is not obliged to drain the server's stderr, and Claude Code only does so during the connection handshake, so on stdio the per-tool lines are otherwise written and discarded. Unwritable path = refuse to start |
 
 ## Make targets
 
@@ -125,7 +127,7 @@ Then ask Claude: *"Where should we open the next clinic?"*
 | `extract` / `marts` / `docs` | pull to parquet; build marts; regenerate `schema.md` |
 | `portable` | export the 7.4 MB PII-free marts-only warehouse |
 | `build` | `extract` + `marts` + `docs` + `portable` |
-| `test` | 154 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
+| `test` | 156 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |
@@ -139,7 +141,7 @@ Then ask Claude: *"Where should we open the next clinic?"*
 
 Nothing here asks to be taken on trust.
 
-- **`make test`** — 130 tests, ~11s, no credentials. Covers every layer between
+- **`make test`** — 156 tests, ~16s, no credentials. Covers every layer between
   the question and the answer: stdio transport, MCP guardrails, mart-to-source
   reconciliation, crosswalk invariants, documented time windows, and regression
   guards on each measured caveat.
@@ -232,7 +234,7 @@ mcp_server/   server.py — the 4 MCP tools
 marts         identity_xwalk · facility_metrics · market_summary · market_flows · _build_metadata
 analysis/     both strategy questions + reproducible SQL
 evals/        agent eval harness · identity quality · query benchmark
-tests/        130 tests across 6 files
+tests/        156 tests across 6 files
 docs/         verified-status.md · roadmap.md · decisions/ (ADRs) · data-notes.md
 ```
 
@@ -247,6 +249,13 @@ docs/         verified-status.md · roadmap.md · decisions/ (ADRs) · data-note
   layer — and produced one confident, well-argued, **wrong** hypothesis, which is
   why its output was verified rather than adopted.
   ([ADR 0001](docs/decisions/0001-agent-validation-strategy.md))
+- **A discovery ablation** (`make ablation`, [`evals/ablation.py`](evals/ablation.py))
+  answering the fair objection to all of the above: was the agent *told* the
+  answer? An earlier caveat C2b stated Q1's conclusion in the dictionary the
+  agent reads before writing any SQL. It has been removed, and with every
+  market-naming caveat stripped, 3 of 3 fresh `claude -p` runs still reach
+  Sacramento + acute care, each citing an access measure. Result in
+  [`evals/ablation.json`](evals/ablation.json).
 - DuckDB, `redshift-connector`, `pyarrow`, `mcp` (official SDK), pytest, `uv`.
 
 Every number in this repo was verified against the warehouse independently of
