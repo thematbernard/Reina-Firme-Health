@@ -1,4 +1,4 @@
-"""Step 3: build data/marts.duckdb from the raw parquet extracts.
+"""Step 4: build data/warehouse.duckdb from the raw parquet extracts.
 
 Kept separate from reina_firme.duckdb (the immutable raw snapshot) so mart
 rebuilds never fight viewers over DuckDB's single-writer lock.
