@@ -11,7 +11,7 @@ weeks.
 > This README is the longer reference behind it.
 
 - **Where should we open next?** Sacramento — as an acute-care hospital, not
-  another clinic. 55,183 members (50,618 active), **zero owned hospitals and zero owned urgent
+  another clinic. 55,183 members (50,639 active), **zero owned hospitals and zero owned urgent
   cares**, and members travel a **median 75.5 miles** for acute care (95.7% over
   30 miles), the worst access in the network by a wide margin.
   → [analysis/01_next_facility.md](analysis/01_next_facility.md)
@@ -101,7 +101,7 @@ make serve             # stdio; or add to Claude Desktop via .mcp.json
 cp .env.example .env   # host, port, database, username, password
 make check             # connectivity smoke test
 make build             # extract → marts → docs → portable  (~1 hr, mostly extract)
-make test              # 156 tests, ~16s
+make test              # 157 tests, ~16s
 ```
 
 Then ask Claude: *"Where should we open the next clinic?"*
@@ -127,7 +127,7 @@ Then ask Claude: *"Where should we open the next clinic?"*
 | `extract` / `marts` / `docs` | pull to parquet; build marts; regenerate `schema.md` |
 | `portable` | export the 7.4 MB PII-free marts-only warehouse |
 | `build` | `extract` + `marts` + `docs` + `portable` |
-| `test` | 156 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
+| `test` | 157 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |
@@ -141,7 +141,7 @@ Then ask Claude: *"Where should we open the next clinic?"*
 
 Nothing here asks to be taken on trust.
 
-- **`make test`** — 156 tests, ~16s, no credentials. Covers every layer between
+- **`make test`** — 157 tests, ~16s, no credentials. Covers every layer between
   the question and the answer: stdio transport, MCP guardrails, mart-to-source
   reconciliation, crosswalk invariants, documented time windows, and regression
   guards on each measured caveat.
@@ -234,7 +234,7 @@ mcp_server/   server.py — the 4 MCP tools
 marts         identity_xwalk · facility_metrics · market_summary · market_flows · _build_metadata
 analysis/     both strategy questions + reproducible SQL
 evals/        agent eval harness · identity quality · query benchmark
-tests/        156 tests across 6 files
+tests/        157 tests across 6 files
 docs/         verified-status.md · roadmap.md · decisions/ (ADRs) · data-notes.md
 ```
 

@@ -365,7 +365,7 @@ Local naming: Redshift's `payer.claims` is `raw.payer_claims`
 
 | column | type | notes |
 |---|---|---|
-| `built_at` | TIMESTAMP WITH TIME ZONE | range 2026-08-31 → 2026-08-31 |
+| `built_at` | TIMESTAMP WITH TIME ZONE | range 2026-09-01 → 2026-09-01 |
 | `source_table` | VARCHAR |  |
 | `row_count` | BIGINT |  |
 | `event_column` | VARCHAR |  |

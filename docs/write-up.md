@@ -14,7 +14,7 @@ number, [analysis/](../analysis) for the two answers in full, and
 
 **Where should we open the next clinic?** Not a clinic. Open in **Sacramento, as
 an acute-care hospital** — ~110 beds and 6–8 ORs, built for surgery,
-cardiology and an emergency department. Sacramento has 50,618 active members and
+cardiology and an emergency department. Sacramento has 50,639 active members and
 **zero owned hospitals, zero owned urgent cares**. Its members travel a median
 **75.5 miles** for acute care against Atlanta's 9.1, and 95.7% of acute claims
 are served more than 30 miles from home. The ambulatory need is already met:

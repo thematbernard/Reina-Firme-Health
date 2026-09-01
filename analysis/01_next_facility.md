@@ -65,9 +65,9 @@ centroid to active member homes:
 
 | market | members | median miles | within 30mi | within 45mi |
 |---|---|---|---|---|
-| Sacramento | 50,615 | 3.8 | 100% | 100% |
-| Stockton | 30,784 | 46.1 | 0.2% | **32.3%** |
-| Modesto | 21,136 | 71.9 | 0% | **0%** |
+| Sacramento | 50,639 | 3.8 | 100% | 100% |
+| Stockton | 30,799 | 46.1 | 0.2% | **32.3%** |
+| Modesto | 21,148 | 71.9 | 0% | **0%** |
 
 Modesto's members sit **71.9 miles** from a Sacramento site — essentially the
 same 75.5-mile trip this analysis calls unacceptable. By its own standard, a
@@ -75,7 +75,7 @@ Sacramento hospital does not serve Modesto. A realistic catchment is Sacramento
 plus the ~32% of Stockton inside 45 miles: **~60,500 active members**, and
 **~$19.7M/yr** of the $33.2M.
 
-Stockton is the phase-2 site, on its own merits (30,784 members, 48.9 median
+Stockton is the phase-2 site, on its own merits (30,799 members, 48.9 median
 miles, 93.1% over 30). Modesto is a third decision, not a spillover.
 
 ## 4. What services — only the hospital lines are leaking
@@ -118,7 +118,7 @@ plus the reachable third of Stockton). Three independent anchors agree:
 |---|---|---|
 | network capacity per active member (2,147 beds, 114 ORs, 1,008,234 members) | 129 | 6.8 |
 | Atlanta FAC-00006's own ratio (206 beds, 12 ORs, 122,480 members) | 102 | 5.9 |
-| Sacramento-only, network ratio (50,615 members) | 108 | 5.7 |
+| Sacramento-only, network ratio (50,639 members) | 108 | 5.7 |
 
 **An earlier draft of this analysis said ~200 beds and 12–14 ORs.** That took
 Atlanta's absolute hospital size as the template without scaling for a market
