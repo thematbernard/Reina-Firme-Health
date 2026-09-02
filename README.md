@@ -247,7 +247,8 @@ docs/         verified-status.md · roadmap.md · decisions/ (ADRs) · data-note
 ## Tools used
 
 - **Claude Code (Opus 5)** for implementation, analysis and documentation
-  throughout. Used heavily and deliberately.
+  throughout — pipeline and mart SQL, tests, the MCP server, and drafting. Used
+  heavily and deliberately, and reviewed and corrected by hand.
 - **A cold Claude subagent** as an uncontaminated validator: no repo access, MCP
   tools only, asked the two strategy questions blind. It reproduced the
   Sacramento decomposition independently, produced a stronger Q1 answer than the
@@ -286,32 +287,48 @@ See **[docs/roadmap.md](docs/roadmap.md)**. Highest value first:
 6. **Real drive time** — 252 isochrone polygons sit unused; this almost certainly
    *strengthens* the Sacramento case.
 
-## Tools used
-
-Built with **Claude Code** (Claude Opus 5) as the primary development
-environment — pipeline and mart SQL, tests, the MCP server, and documentation
-drafting, all reviewed and corrected by hand. Stack: Python, DuckDB, PyArrow,
-`psycopg`/`psql` against Redshift, `pytest`, `uv`, and the Model Context Protocol
-Python SDK. The eval harness drives the `claude -p` CLI over the real stdio MCP
-transport, so the same tooling appears in the product and in its tests.
-
 ## Time spent
 
-**Approximately 9–10 hours**, against a planned budget of 8–10 (`PLAN.md`).
+**Approximately 12–13 hours of build**, against a planned budget of 8–10
+(`PLAN.md`), plus a further ~6–8 hours of presentation preparation. The build
+overran; the reasons are below rather than rounded away.
 
-Work happened in three sessions rather than continuously, so the calendar span
-(2026-08-28 → 2026-08-30) overstates effort considerably. Derived from commit
-clustering:
+Work happened in five sessions rather than continuously, so the calendar span
+(2026-08-28 → 2026-09-02) overstates effort considerably. Spans are derived from
+commit clustering:
 
 | Session | Span | Commits | Work |
 |---|---|---|---|
 | Fri 8/28 eve | 19:17–21:24 (~2.1h) | 3 | Connectivity, profiling, extract/load, first marts + MCP server |
-| Sat 8/29 | 12:12–17:01 (~4.8h) | 15 | Semantic layer, both analyses, evals, marts, measurement, stdio tests, portable artifact, README, guardrail hardening |
-| Sun 8/30 | ~1.5h | 1 | Deck, talk track, number-consistency pass |
+| Sat 8/29 | 12:12–17:01 (~4.8h) | 15 | Semantic layer, both analyses, evals, marts, measurement, stdio tests, portable artifact, guardrail hardening |
+| Sun 8/30 | 11:30–14:32 (~2.5h) | 3 | Agent evals run (9/11), roadmap reconciliation, denominator clarifications |
+| Mon 8/31 | two clusters (~2h) | 5 | `market_flows` mart, write-up deliverable, eval-overwrite fix, Q1 sizing correction |
+| Tue 9/1 | 13:01–21:44 (~6h, one long interior gap) | 6 | Ablation, live SQL logging, source row-count reconciliation, `query_source` + Redshift cold-start fixes, caveat C1 rewrite |
 
 Add roughly an hour of setup before the first commit (credentials, reading the
 dataset spec, `PLAN.md`) that left no commit trail.
 
-The largest interior gap is 8/29 13:18→15:03, which was the portable-artifact
-step — real work, not a break. Session spans are therefore a fair proxy for
-effort here rather than an upper bound.
+**Where the overrun went.** Roughly half of it is two things the original plan
+did not anticipate, and both are load-bearing:
+
+- **`marts.market_flows`** — the "what services should it offer" half of Q1
+  turned out to need its own grain (member city × care city × service line ×
+  network status). Without it that half of the answer is a three-table raw join
+  the agent has to get right every time.
+- **The ablation** — an earlier caveat in `semantic/dictionary.md` stated Q1's
+  conclusion outright, in the file the agent reads before writing any SQL.
+  Deleting it is only honest if the agent can do without it, so the deletion had
+  to be followed by an experiment. That is an hour spent removing my own
+  advantage, and it is the answer to the sharpest objection available to this
+  project.
+
+The rest is hardening found by using the thing: a source escape hatch for the two
+tables the local warehouse does not carry, a Redshift cold-start bug (a
+serverless resume measured 24.0s against a 20s timeout), and a caveat that was
+correct but under-derived until an objection exposed it.
+
+**On the ratio, since the MCP server is only ~460 lines.** Tests and evals are
+2,755 lines against 515 for the server — about 70% of the Python in this repo is
+evidence rather than features. That is the intended shape: building an MCP server
+over DuckDB is a couple of hours, and the remaining time went into establishing
+that its answers are correct and that they were not smuggled in.
