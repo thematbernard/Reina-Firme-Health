@@ -18,6 +18,13 @@ from pathlib import Path
 import duckdb
 from mcp.server.mcpserver import MCPServer
 
+try:                                    # optional: source access is not required
+    import redshift_connector
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:                     # pragma: no cover - declared in pyproject
+    redshift_connector = None
+
 # Diagnostics go to stderr, never stdout: on the stdio transport stdout carries
 # the JSON-RPC frames, and a single stray byte there desynchronises the client.
 log = logging.getLogger(__name__)
@@ -79,6 +86,48 @@ MARTS_ONLY_NOTICE = (
 
 MAX_ROWS = 500
 ALLOWED_START = re.compile(r"^\s*(WITH|SELECT|DESCRIBE|SHOW|SUMMARIZE|EXPLAIN)\b", re.IGNORECASE)
+
+# --- source (Redshift) escape hatch ------------------------------------------
+# Deliberately a separate tool rather than a fallback inside run_query. The
+# marts encode five measured caveats structurally; at source those revert to
+# prose the model must remember. Making the agent *choose* this path keeps that
+# trade visible in the log instead of hiding it behind a retry.
+SOURCE_ENV_KEYS = ("host", "port", "database", "username", "password")
+SOURCE_TIMEOUT_S = 120        # a cold Redshift Serverless resume exceeds 20s
+SOURCE_MAX_ROWS = 200         # tighter than MAX_ROWS: this path is metered
+
+
+def source_configured() -> bool:
+    return redshift_connector is not None and all(
+        os.environ.get(k, "").strip() for k in SOURCE_ENV_KEYS
+    )
+
+
+def _connect_source():
+    """Connect to Redshift, retrying once on timeout.
+
+    Redshift Serverless auto-pauses when idle and takes longer to resume than a
+    short socket timeout allows, so the *first* call after a quiet period fails
+    while the second succeeds. Measured on 2026-09-01: `make check` timed out at
+    20s, then completed on the retry. One retry, because a second timeout means
+    something other than a cold start.
+    """
+    last: Exception | None = None
+    for attempt in (1, 2):
+        try:
+            return redshift_connector.connect(
+                host=os.environ["host"].strip(),
+                port=int(os.environ["port"].strip()),
+                database=os.environ["database"].strip(),
+                user=os.environ["username"].strip(),
+                password=os.environ["password"].strip(),
+                ssl=True,
+                timeout=SOURCE_TIMEOUT_S,
+            )
+        except Exception as e:                      # noqa: BLE001 - reported to caller
+            last = e
+            log.warning("source connect attempt %d/2 failed: %s", attempt, e)
+    raise last
 
 
 def sql_code_only(sql: str) -> str:
@@ -154,6 +203,11 @@ mcp = MCPServer(
         + ("MODE: marts-only — raw.* tables are NOT available in this deployment; "
            "answer from marts.* and say so when a question needs detail they do "
            "not carry." if DB_MODE == "portable" else "MODE: full warehouse.")
+        + (" SOURCE: Redshift reachable via query_source — an escape hatch for the "
+           "two tables the local warehouse does not carry. Prefer marts.*, then "
+           "raw.*; query_source is a last resort and the mart guarantees do not "
+           "apply to its results." if source_configured() else
+           " SOURCE: not configured; marts.* and raw.* are all there is.")
     ),
 )
 
@@ -270,6 +324,61 @@ def run_query(sql: str) -> str:
         con.close()
     log.info("run_query returned %d rows", min(len(rows), MAX_ROWS))
     return _format(cols, rows[:MAX_ROWS], truncated=len(rows) > MAX_ROWS)
+
+
+@mcp.tool()
+def query_source(sql: str) -> str:
+    """ESCAPE HATCH — query the Redshift source directly, bypassing the marts.
+
+    Use ONLY when `marts.*` and `raw.*` genuinely cannot answer the question,
+    and say in your answer that you used it and why. Two tables exist here and
+    nowhere else: `outreach.communications_log` (4.6M rows of per-message
+    delivery telemetry) and `ehr.observations` at row grain (70.8M rows; the
+    local copy is pre-aggregated to patient x month x LOINC).
+
+    THE MART GUARANTEES DO NOT APPLY HERE. Source tables are NOT windowed to a
+    common 12 months, `ops.appointments.provider_id` is exposed and is randomly
+    assigned (caveat C1), facility ownership is not pre-joined (C5), and no
+    metric is pre-computed. Every rule in get_data_dictionary you would
+    otherwise get for free must be applied by hand.
+
+    Names differ from the local warehouse: source is `payer.members`, local is
+    `raw.payer_members`. Read-only, single statement, capped at 200 rows.
+    Slow by comparison — seconds, not milliseconds — and the first call after an
+    idle period pays a Redshift Serverless resume."""
+    if not source_configured():
+        log.info("query_source unavailable (no credentials)")
+        return ("error: source access is not configured on this server. "
+                "Answer from marts.* / raw.* or say the data is unavailable.")
+    code = sql_code_only(sql)
+    if not ALLOWED_START.match(code):
+        log.warning("query_source rejected (not a read statement): %s", _oneline(sql))
+        return "error: only SELECT/WITH/DESCRIBE/SHOW/SUMMARIZE/EXPLAIN queries are allowed"
+    if ";" in code.rstrip().rstrip(";"):
+        log.warning("query_source rejected (multiple statements): %s", _oneline(sql))
+        return "error: a single statement per call"
+    log.info("query_source (SOURCE, off-mart): %s", _oneline(sql))
+    try:
+        conn = _connect_source()
+    except Exception as e:                          # noqa: BLE001
+        log.warning("query_source could not reach source: %s", e)
+        return (f"error: could not reach the source after 2 attempts: {e}. "
+                "Fall back to marts.* / raw.* or report the limitation.")
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        cols = [d[0] if isinstance(d[0], str) else d[0].decode() for d in cur.description]
+        rows = cur.fetchmany(SOURCE_MAX_ROWS + 1)
+    except Exception as e:                          # noqa: BLE001
+        log.warning("query_source failed: %s — sql: %s", e, _oneline(sql))
+        return f"error: {e}"
+    finally:
+        conn.close()
+    log.info("query_source returned %d rows", min(len(rows), SOURCE_MAX_ROWS))
+    banner = ("[SOURCE QUERY — mart caveats were NOT applied; state this in your "
+              "answer]\n")
+    return banner + _format(cols, rows[:SOURCE_MAX_ROWS],
+                            truncated=len(rows) > SOURCE_MAX_ROWS)
 
 
 def build_log_handlers() -> list[logging.Handler]:

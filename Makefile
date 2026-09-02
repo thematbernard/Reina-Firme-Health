@@ -3,6 +3,9 @@
 check:        ## connectivity smoke test against Redshift
 	uv run pipeline/00_connect_check.py
 
+warm:         ## wake Redshift Serverless from idle (run in pre-flight, before any demo)
+	uv run pipeline/00_connect_check.py --warm
+
 profile:      ## dump schema + date ranges to docs/data-notes.md
 	uv run pipeline/01_profile.py
 
@@ -46,7 +49,7 @@ fingerprint:  ## print the build fingerprint the MCP server should report
 	@uv run python -c "import sys; sys.path.insert(0,'mcp_server'); import server; print(server.build_fingerprint())"
 
 golden:       ## regenerate tests/golden/tool_descriptions.json (review the diff!)
-	uv run python -c "import json,sys;sys.path.insert(0,'mcp_server');import server;from pathlib import Path;Path('tests/golden/tool_descriptions.json').write_text(json.dumps({n:' '.join(getattr(server,n).__doc__.split()) for n in ('get_data_dictionary','list_tables','describe_table','run_query')},indent=2,sort_keys=True)+chr(10))"
+	uv run python -c "import json,sys;sys.path.insert(0,'mcp_server');import server;from pathlib import Path;Path('tests/golden/tool_descriptions.json').write_text(json.dumps({n:' '.join(getattr(server,n).__doc__.split()) for n in ('get_data_dictionary','list_tables','describe_table','run_query','query_source')},indent=2,sort_keys=True)+chr(10))"
 
 serve:        ## run the MCP server on stdio (what Claude Desktop uses)
 	uv run mcp_server/server.py

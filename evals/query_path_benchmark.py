@@ -182,7 +182,7 @@ def bench_redshift(reps: int) -> dict | None:
         conn = redshift_connector.connect(
             host=os.environ["host"].strip(), port=int(os.environ["port"].strip()),
             database=os.environ["database"].strip(), user=os.environ["username"].strip(),
-            password=os.environ["password"].strip(), ssl=True, timeout=15,
+            password=os.environ["password"].strip(), ssl=True, timeout=120,
         )
     except Exception as e:
         print(f"\nRedshift baseline NOT MEASURED — {type(e).__name__}: {str(e)[:90]}")

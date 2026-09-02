@@ -37,7 +37,7 @@ denominator you pick manufactures the story.
     Redshift (read-only)
       └─ extract to parquet ─→ DuckDB warehouse ─→ 4 marts
                                                     └─ semantic layer
-                                                         └─ MCP server (4 tools)
+                                                         └─ MCP server (5 tools)
                                                               └─ Claude
 
 A **mart** here is a table modelled for a question rather than for a source
@@ -52,7 +52,7 @@ system: a fixed grain with joins and business rules already applied.
 
 The semantic layer is two documents in one: hand-written business rules, and a
 schema reference **generated** from the warehouse so column facts cannot drift
-from reality. The MCP server exposes four tools over stdio, read-only and
+from reality. The MCP server exposes five tools over stdio, read-only and
 row-capped, and reports a build fingerprint in its instructions so a client can
 detect that it is running a stale server.
 
@@ -78,7 +78,7 @@ must remember* to *impossible to express*. Tradeoff: **the guarantee stops at
 the mart edge.** Off-mart questions fall back to `raw.*`, where caveats revert
 to prose — and that is exactly where the one real eval failure happened.
 
-**Test the data and the agent separately.** `make test` runs **157**
+**Test the data and the agent separately.** `make test` runs **167**
 deterministic tests in ~16s with no AI involved: mart grain, reconciliation back
 to source, and guards that retired caveats have not crept back. Several tests
 pin the *conclusions* of this write-up, including one asserting that recapture

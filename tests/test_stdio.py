@@ -61,7 +61,7 @@ def test_server_starts_and_completes_handshake():
 
     protocol, n_tools = run(body)
     assert protocol, "no protocol version negotiated"
-    assert n_tools == 4
+    assert n_tools == 5
 
 
 def test_server_info_and_instructions_transport():
@@ -93,7 +93,8 @@ def test_tool_descriptions_round_trip_unmangled():
 
     tools = {t.name: t for t in run(lambda s: s.list_tools()).tools}
     assert set(tools) == {
-        "get_data_dictionary", "list_tables", "describe_table", "run_query"
+        "get_data_dictionary", "list_tables", "describe_table", "run_query",
+        "query_source",
     }
     for name, tool in tools.items():
         expected = " ".join(getattr(srv, name).__doc__.split())
@@ -104,6 +105,7 @@ def test_tool_descriptions_round_trip_unmangled():
     # parameter schemas must survive serialization
     assert "table" in tools["describe_table"].input_schema["properties"]
     assert "sql" in tools["run_query"].input_schema["properties"]
+    assert "sql" in tools["query_source"].input_schema["properties"]
     assert tools["list_tables"].input_schema.get("properties", {}) == {}
 
 

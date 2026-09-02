@@ -1,8 +1,8 @@
 # Reina Firme Strategy Engine
 
 Unify Reina Firme Health's fragmented data, put an LLM-queryable MCP server on
-top of it, and use that to answer the two questions the Strategy team said take
-weeks.
+top of it, and use that to answer the two questions the Strategy team can't get
+answered fast enough.
 
 **Both questions are answered, and one of them turned out to be wrong.**
 
@@ -36,8 +36,8 @@ adjective — full detail and method in
 | no fast query path | DuckDB + MCP server | **2ms** vs 298ms raw vs 0.4s at source |
 
 The honest caveat, stated up front: **Redshift at 0.1–0.2s was never the
-bottleneck.** What collapsed from weeks to minutes is the *construction* of a
-correct query, not its execution. The data contains traps — a randomly-assigned
+bottleneck.** What collapsed is the *construction* of a correct query, not its
+execution. The data contains traps — a randomly-assigned
 `provider_id`, tables on different time windows, partner facilities inflating
 denominators, savings hidden in the wrong column — that produce confidently
 wrong answers. The marts make five of them structurally impossible.
@@ -74,7 +74,8 @@ semantic/  dictionary.md (hand-written rules + measured caveats)
            joins.json    (single source of truth, asserted orphan-free)
       │
       ▼
-mcp_server/server.py    4 tools, read-only, row-capped, build-fingerprinted
+mcp_server/server.py    5 tools, read-only, row-capped, build-fingerprinted
+      │                       4 over DuckDB + query_source over Redshift (opt-in)
       │  stdio (Claude Desktop) or streamable-http
       ▼
 Claude
@@ -101,7 +102,7 @@ make serve             # stdio; or add to Claude Desktop via .mcp.json
 cp .env.example .env   # host, port, database, username, password
 make check             # connectivity smoke test
 make build             # extract → marts → docs → portable  (~1 hr, mostly extract)
-make test              # 157 tests, ~16s
+make test              # 167 tests, ~16s
 ```
 
 Then ask Claude: *"Where should we open the next clinic?"*
@@ -123,11 +124,12 @@ Then ask Claude: *"Where should we open the next clinic?"*
 
 | target | what |
 |---|---|
+| `warm` | wake Redshift Serverless from idle — **run before any demo**; a cold resume measured **24.0s**, warm **0.5s** |
 | `check` / `profile` | Redshift connectivity; schema + date-range profile |
 | `extract` / `marts` / `docs` | pull to parquet; build marts; regenerate `schema.md` |
 | `portable` | export the 7.4 MB PII-free marts-only warehouse |
 | `build` | `extract` + `marts` + `docs` + `portable` |
-| `test` | 157 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
+| `test` | 167 tests: warehouse, marts, MCP guardrails, stdio transport, harness structure |
 | `analysis` | re-run both strategy analyses and print every number |
 | `identity-quality` | measure crosswalk precision and recall |
 | `benchmark` | time marts vs raw vs Redshift |
@@ -141,7 +143,7 @@ Then ask Claude: *"Where should we open the next clinic?"*
 
 Nothing here asks to be taken on trust.
 
-- **`make test`** — 157 tests, ~16s, no credentials. Covers every layer between
+- **`make test`** — 167 tests, ~16s, no credentials. Covers every layer between
   the question and the answer: stdio transport, MCP guardrails, mart-to-source
   reconciliation, crosswalk invariants, documented time windows, and regression
   guards on each measured caveat.
@@ -184,6 +186,10 @@ Nothing here asks to be taken on trust.
   `ehr.observations` is pre-aggregated in Redshift to patient x month x LOINC as
   `raw.ehr_observations_monthly`, so row-level vitals and labs are not
   recoverable without a re-extract. Both are declared in `pipeline/02_extract.py`.
+  Both are now reachable at row grain through the `query_source` tool — an
+  explicit escape hatch to Redshift, not a fallback, so the agent has to choose
+  it and say so. Mart guarantees do not extend across it; see
+  [ADR 0003](docs/decisions/0003-source-escape-hatch.md).
 - **The observations rollup did not pay for itself.** 70.8M source rows became
   47.8M — a 32% reduction, ~1.48 source rows per group — because patient x month
   x LOINC is nearly unique here. Nothing downstream consumes it: no mart or
@@ -230,11 +236,11 @@ Nothing here asks to be taken on trust.
 pipeline/     00 connect · 01 profile · 02 extract · 03 load · 04 marts
               05 gen schema doc · 06 export portable · sql/ mart definitions
 semantic/     dictionary.md (hand) · schema.md (generated) · joins.json
-mcp_server/   server.py — the 4 MCP tools
+mcp_server/   server.py — the 5 MCP tools
 marts         identity_xwalk · facility_metrics · market_summary · market_flows · _build_metadata
 analysis/     both strategy questions + reproducible SQL
 evals/        agent eval harness · identity quality · query benchmark
-tests/        157 tests across 6 files
+tests/        167 tests across 6 files
 docs/         verified-status.md · roadmap.md · decisions/ (ADRs) · data-notes.md
 ```
 

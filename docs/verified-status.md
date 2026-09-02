@@ -11,7 +11,7 @@ never estimated.
 | no consistent shape | 4 marts + semantic layer | **Measured** — Q1/Q2 each 1 query, 195–268x faster than hand-assembly |
 | no fast query path | DuckDB + MCP | **Measured** — 293x vs Redshift; but see the caveat, latency was not the bottleneck |
 
-Reproduce: `make identity-quality`, `make benchmark`, `make test` (157 tests, ~16s).
+Reproduce: `make identity-quality`, `make benchmark`, `make test` (167 tests, ~16s).
 
 ---
 
@@ -125,8 +125,9 @@ The brief's complaint was not per-query latency — it was that a Strategy analy
 could not *get to* a correct query: no unified identity, no consistent shape, and
 a set of traps (uniform provider assignment, mixed time windows, partner
 facilities in the denominator, savings hidden in the wrong column) that produce
-confidently wrong answers. What actually collapsed from weeks to minutes is the
-**construction** of the query, not its execution.
+confidently wrong answers. What actually collapsed is the **construction** of the
+query, not its execution. ("Weeks" is not measured anywhere here — the brief says
+Strategy can't get answers fast enough, with no duration attached.)
 
 Two honest disclosures:
 
@@ -168,7 +169,7 @@ the demo dead.
 
 `tests/test_stdio.py` (14 tests) spawns the server as a subprocess exactly as
 Claude Desktop does, completes the initialize handshake, and round-trips every
-tool through the protocol: all four tools advertised with correct parameter
+tool through the protocol: all five tools advertised with correct parameter
 schemas, `list_tables` / `describe_table` / `run_query` /
 `get_data_dictionary` returning real content, the guardrail rejection arriving
 as a normal tool result rather than breaking the session, SQL errors likewise,
@@ -200,7 +201,7 @@ to change when the semantic layer changes, not just when code does.
 
 Run with `make evals-cli`: the 11 cases in `evals/cases.json` driven through
 `claude -p` with `--mcp-config .mcp.json --strict-mcp-config`, so the agent
-reaches the four tools over the **real stdio MCP transport**. Model
+reaches the five tools over the **real stdio MCP transport**. Model
 `claude-opus-5`, single rep, no `ANTHROPIC_API_KEY` — it uses the Claude Code
 CLI's own credential. `evals/results.json` records the runner and a harness note.
 

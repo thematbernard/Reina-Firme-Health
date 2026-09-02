@@ -122,6 +122,29 @@ count is the honest proxy for time-to-answer.
 `market_summary(city)` would make the common paths impossible to get wrong,
 leaving raw SQL as the escape hatch.
 
+This matters more now that there are three tiers rather than two. `query_source`
+(ADR 0003) widened the ungoverned surface deliberately: the agent can reach
+Redshift directly for the two tables the local warehouse does not carry. That
+widening is opt-in, logged and labelled, but it is still ungoverned — nothing
+plays the role for source that the marts play locally. Curated tools narrow the
+funnel from the other end, by giving the agent a right answer to reach for
+before it reaches for raw SQL against production.
+
+## 6b. Govern the source path — done at the tool boundary, not at the data
+
+`query_source` carries the same read-only and single-statement guardrails as
+`run_query`, checked before a socket opens, plus a tighter 200-row cap and a
+provenance banner on every result. What it does *not* have is a semantic layer
+of its own: source table names differ from local (`payer.members` vs
+`raw.payer_members`), nothing is windowed to a common 12 months, and the
+randomly-assigned `provider_id` is fully exposed. The tool's docstring states
+all of this and a test asserts the warning survives edits — but a docstring is
+prose, which is exactly the failure mode the marts were built to escape.
+
+The honest next step is a generated source-schema reference, the way
+`semantic/schema.md` is generated for the local warehouse, so the agent is not
+guessing at source column names from memory of the local ones.
+
 ## 7. Real drive time
 
 Distances are straight-line haversine. `raw.external_drive_time_isochrones`

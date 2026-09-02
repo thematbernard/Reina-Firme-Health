@@ -212,6 +212,80 @@ def test_run_query_returns_rows():
     assert out.splitlines()[1].strip() == "284"
 
 
+# --- query_source: the off-mart escape hatch ---------------------------------
+# These run without credentials: every assertion below is about the guardrails,
+# which are checked BEFORE any connection is attempted. Nothing here touches
+# Redshift, so the suite stays credential-free.
+
+@pytest.mark.parametrize("sql", [
+    "DROP TABLE payer.members",
+    "DELETE FROM payer.members",
+    "UPDATE payer.members SET city = 'x'",
+    "INSERT INTO payer.plans VALUES ('a')",
+    "COPY payer.members TO 's3://exfil/'",
+    "SELECT 1; DROP TABLE payer.members",
+])
+def test_query_source_rejects_non_read_queries(sql, monkeypatch):
+    import server
+    monkeypatch.setattr(server, "source_configured", lambda: True)
+    out = server.query_source(sql)
+    assert out.startswith("error:")
+    assert "allowed" in out or "single statement" in out
+
+
+def test_query_source_reports_unavailable_rather_than_hanging(monkeypatch):
+    """With no credentials the tool must fail fast and tell the agent to fall
+    back — not attempt a connection and stall the session."""
+    import server
+    monkeypatch.setattr(server, "source_configured", lambda: False)
+    out = server.query_source("SELECT count(*) FROM payer.members")
+    assert out.startswith("error:")
+    assert "not configured" in out
+    assert "marts" in out
+
+
+def test_query_source_guardrails_run_before_connecting(monkeypatch):
+    """A rejected statement must never open a socket. Asserted by making any
+    connection attempt an immediate failure: the guardrail message proves the
+    check came first."""
+    import server
+    monkeypatch.setattr(server, "source_configured", lambda: True)
+    def explode():
+        raise AssertionError("connected despite a rejected statement")
+    monkeypatch.setattr(server, "_connect_source", explode)
+    assert "allowed" in server.query_source("DELETE FROM payer.members")
+
+
+def test_query_source_retries_once_on_failure(monkeypatch):
+    """The cold-start fix: connect() is attempted twice before giving up."""
+    import server
+    monkeypatch.setenv("host", "h"); monkeypatch.setenv("port", "5439")
+    monkeypatch.setenv("database", "d"); monkeypatch.setenv("username", "u")
+    monkeypatch.setenv("password", "p")
+    calls = []
+    class FakeConnector:
+        @staticmethod
+        def connect(**kw):
+            calls.append(kw)
+            raise TimeoutError("timed out")
+    monkeypatch.setattr(server, "redshift_connector", FakeConnector)
+    with pytest.raises(TimeoutError):
+        server._connect_source()
+    assert len(calls) == 2, f"expected 2 attempts, got {len(calls)}"
+    assert calls[0]["timeout"] >= 60, "timeout too short for a serverless resume"
+
+
+def test_query_source_description_warns_that_caveats_do_not_apply():
+    """The tool's docstring is the only thing standing between the agent and an
+    ungoverned query path. If the warning is edited away, this fails."""
+    import server
+    doc = server.query_source.__doc__
+    assert "ESCAPE HATCH" in doc
+    assert "DO NOT APPLY" in doc
+    for caveat in ("C1", "C5"):
+        assert caveat in doc, f"docstring no longer cites caveat {caveat}"
+
+
 def test_describe_table_rejects_injection():
     import server
     assert server.describe_table("raw.x; DROP TABLE y").startswith("error:")
