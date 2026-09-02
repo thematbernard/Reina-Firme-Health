@@ -134,13 +134,37 @@ counts alone ignore partial-year coverage.
 These were found by testing the warehouse. Each one will silently produce a
 wrong answer if ignored.
 
-**C1. `ops_appointments.provider_id` is randomly assigned — do not use it.**
-Only **1.2%** of appointments have a provider whose `primary_facility_id`
-matches the appointment's facility; chance alone gives ~1.2% across 84
-facilities. Every clinic therefore shows ~5,597 "distinct providers" (of 14,000
-total). This column cannot support provider productivity, staffing, panel or
-capacity analysis. `ops_providers.primary_facility_id` is the real
-provider↔facility assignment.
+**C1. `ops_appointments.provider_id` is assigned at random within specialty and
+carries no location information — do not use it as a facility denominator.**
+Only **1.197%** of appointments have a provider whose `primary_facility_id`
+matches the appointment's facility. Chance predicts **1.195%**: appointments draw
+from a pool of 5,600 distinct providers, which is exactly the set based at the 84
+owned facilities (~66.9 each), so 66.9/5600 = 1.195%. Observed and expected agree
+to three decimals.
+
+The column is **not pure noise**, and the plausible-sounding defence of it is
+false, so check both before trusting it:
+
+- **It is perfectly informative about specialty.** `ops_appointments.specialty`
+  equals `ops_providers.specialty` on **100.0%** of 3.2M rows (chance across 19
+  specialties would be 5.26%). That signal is redundant — the appointment already
+  carries its own `specialty`.
+- **It is not multi-site working.** The tempting reading is that a provider ID is
+  permanent while clinicians rotate between sites, so a mismatch is expected and
+  benign. It does not survive measurement: each of the 5,600 providers appears at
+  **81.1 of 84 facilities** (min 76) across **all 3.0 states** and 26 cities in a
+  single 12-month window. No clinician works in Northern California, Greater
+  Atlanta and Central Texas in the same year. Pure random assignment predicts
+  83.9 facilities; the small shortfall is specialty/facility availability, not
+  geography.
+
+Consequence: `count(DISTINCT provider_id)` returns ~**5,597** at every clinic —
+also not a coincidence, since 42,121 random draws from a 5,600 pool predicts
+5,597.0 distinct values, and the observed range across all 64 owned clinics is
+5,593-5,600. The real figure is **66.9**. This column cannot support provider
+productivity, staffing, panel or capacity analysis.
+`ops_providers.primary_facility_id` is the real provider↔facility assignment, and
+`marts.facility_metrics.providers_based` is built from it.
 
 **C2. Per-facility volume is near-uniform, so large utilization gaps are not
 constructible.** Completed appointments across all 64 owned clinics: mean

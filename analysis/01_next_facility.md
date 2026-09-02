@@ -55,7 +55,7 @@ on it.
 Stockton (48.9 median miles to acute care) and Modesto (53.2) have the same
 structural problem and no owned hospital either. As a region:
 
-- **102,540 active members**
+- **102,586 active members**
 - **$33.2M/yr** recoverable plan-paid spend (Sacramento $16.5M, Stockton $10.0M,
   Modesto $6.7M)
 
